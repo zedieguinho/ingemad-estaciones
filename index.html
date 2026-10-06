@@ -1,0 +1,717 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#33454c">
+<title>Ingemad Estaciones</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+body{margin:0}[hidden]{display:none!important}img{max-width:100%}
+/* Layout: tablet-first shop-floor app. Top bar with station tabs; station view = scan bar, then queue | work panel; supervisor = KPI strip + flow board. */
+:root{
+  --bg:#e9ecec; --panel:#f7f8f8; --line:#cfd5d6; --ink:#1b2326; --muted:#5d6a6e;
+  --steel:#33454c; --accent:#f0b400; --accent-ink:#1b1a12;
+  --ok:#1f8a4c; --warn:#c96a00; --bad:#c2352b; --run:#1d6fb8;
+  --ok-bg:#dcefe3; --warn-bg:#f7e6cf; --bad-bg:#f6dad7; --run-bg:#d8e7f5;
+  --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#13181a; --panel:#1b2225; --line:#2f3a3e; --ink:#e6ebec; --muted:#93a1a5;
+  --steel:#26343a; --accent:#f2bd1d; --accent-ink:#1b1a12;
+  --ok:#4cc27e; --warn:#f0a03c; --bad:#ef6b5f; --run:#5aa6ec;
+  --ok-bg:#163326; --warn-bg:#3a2a12; --bad-bg:#3d1c19; --run-bg:#14293d; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#13181a; --panel:#1b2225; --line:#2f3a3e; --ink:#e6ebec; --muted:#93a1a5;
+  --steel:#26343a; --accent:#f2bd1d; --accent-ink:#1b1a12;
+  --ok:#4cc27e; --warn:#f0a03c; --bad:#ef6b5f; --run:#5aa6ec;
+  --ok-bg:#163326; --warn-bg:#3a2a12; --bad-bg:#3d1c19; --run-bg:#14293d; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.45}
+button,select,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--steel);color:#eef2f3;
+  display:flex;align-items:center;gap:16px;padding:10px 16px;flex-wrap:wrap}
+.brand{font-family:var(--display);font-weight:700;font-size:22px;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap}
+.brand span{color:var(--accent)}
+.tabs{display:flex;gap:4px;overflow-x:auto;flex:1;min-width:0;scrollbar-width:none}
+.tab{border:0;background:transparent;color:inherit;opacity:.75;padding:8px 12px;border-radius:6px;
+  font-family:var(--display);font-weight:600;font-size:17px;letter-spacing:.03em;text-transform:uppercase;white-space:nowrap;display:flex;gap:6px;align-items:center}
+.tab:hover{opacity:1}
+.tab[aria-current="true"]{opacity:1;background:var(--accent);color:var(--accent-ink)}
+.tab .n{font-family:var(--mono);font-size:12px;background:rgba(0,0,0,.2);padding:1px 6px;border-radius:9px}
+.bar-r{display:flex;gap:10px;align-items:center;font-size:13px}
+.conn{display:inline-flex;align-items:center;gap:6px}
+.conn::before{content:"";width:8px;height:8px;border-radius:50%;background:#8a9599}
+.conn.on::before{background:#4cc27e}
+.conn.off::before{background:#ef6b5f}
+.linkbtn{background:none;border:0;text-decoration:underline;color:inherit;opacity:.85;font-size:13px;padding:0}
+
+main{padding:20px 16px 40px;max-width:1280px;margin:0 auto}
+h1{font-family:var(--display);font-weight:700;font-size:34px;line-height:1;margin:0;text-transform:uppercase;letter-spacing:.02em;text-wrap:balance}
+h2{font-family:var(--display);font-weight:600;font-size:20px;margin:0;text-transform:uppercase;letter-spacing:.04em}
+.label{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+.hint{font-size:13px;color:var(--muted)}
+
+.st-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:16px}
+.st-head .sub{color:var(--muted);margin-top:4px}
+.op{display:flex;flex-direction:column;gap:4px}
+select,input,textarea{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px 12px;min-height:44px;max-width:100%}
+
+/* scan bar */
+.scan{background:var(--panel);border:2px solid var(--ink);border-radius:10px;padding:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:20px}
+.scan .qr-ico{width:40px;height:40px;flex:none;color:var(--ink)}
+.scan input{flex:1;min-width:200px;font-family:var(--mono);font-size:22px;min-height:56px;border-width:2px}
+.scan input:focus{border-color:var(--accent);outline:none}
+.scan .hint{flex-basis:100%}
+.filebtn{position:relative;overflow:hidden}
+.filebtn input{position:absolute;inset:0;opacity:0;cursor:pointer;min-height:0}
+
+.cols{display:grid;grid-template-columns:minmax(260px,360px) 1fr;gap:20px;align-items:start}
+@media (max-width:820px){.cols{grid-template-columns:1fr}}
+
+.queue{display:flex;flex-direction:column;gap:8px;min-width:0}
+.qhead{display:flex;justify-content:space-between;align-items:center;margin:4px 0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px 14px;text-align:left;width:100%;
+  display:grid;grid-template-columns:1fr auto;gap:4px 10px}
+.card:hover{border-color:var(--muted)}
+.card[aria-pressed="true"]{border-color:var(--ink);box-shadow:inset 4px 0 0 var(--accent)}
+.card.soon{opacity:.75;border-style:dashed}
+.card .id{font-family:var(--mono);font-weight:600}
+.card .cl{grid-column:1/-1;font-weight:500}
+.card .sp{grid-column:1/-1;color:var(--muted);font-size:13px}
+.card .ft{grid-column:1/-1;display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:12px}
+.empty{border:1px dashed var(--line);border-radius:8px;padding:24px;color:var(--muted);text-align:center}
+
+.chip{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:10px;font-size:12px;font-weight:600;white-space:nowrap}
+.chip::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.s-cola{background:var(--line);color:var(--ink)}
+.s-proceso{background:var(--run-bg);color:var(--run)}
+.s-pausa{background:var(--warn-bg);color:var(--warn)}
+.s-bloqueada{background:var(--bad-bg);color:var(--bad)}
+.s-despachada{background:var(--ok-bg);color:var(--ok)}
+.pri{font-weight:700;font-size:11px;letter-spacing:.06em;text-transform:uppercase;padding:2px 6px;border-radius:4px;border:1px solid var(--line);color:var(--muted)}
+.pri.alta{border-color:var(--bad);color:var(--bad)}
+.ex{font-size:11px;border:1px dashed var(--muted);color:var(--muted);padding:1px 6px;border-radius:4px}
+.late{color:var(--bad);font-weight:600}
+.due{color:var(--muted)}
+
+.work{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px;min-width:0;display:flex;flex-direction:column;gap:20px}
+.work.blocked{background-image:repeating-linear-gradient(-45deg,transparent 0 14px,var(--bad-bg) 14px 28px);background-size:100% 8px;background-repeat:no-repeat}
+.w-top{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:flex-start}
+.w-id{font-family:var(--mono);font-size:28px;font-weight:600;line-height:1.1}
+.w-cl{font-size:18px;font-weight:500}
+.specs{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px 16px}
+.specs div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.specs b{font-weight:600;overflow-wrap:anywhere}
+
+.route{display:flex;overflow-x:auto;padding-bottom:4px}
+.rstep{flex:1;min-width:84px;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:12px;color:var(--muted);text-align:center;position:relative}
+.rstep::before{content:"";position:absolute;top:9px;left:-50%;right:50%;height:3px;background:var(--line)}
+.rstep:first-child::before{display:none}
+.rstep .dot{width:20px;height:20px;border-radius:50%;border:3px solid var(--line);background:var(--panel);z-index:1}
+.rstep.done{color:var(--ink)} .rstep.done .dot{background:var(--ok);border-color:var(--ok)} .rstep.done::before{background:var(--ok)}
+.rstep.now{color:var(--ink);font-weight:600} .rstep.now .dot{border-color:var(--accent);background:var(--accent)} .rstep.now::before{background:var(--ok)}
+.rstep small{font-family:var(--mono);font-size:11px}
+
+.clock{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.timer{font-family:var(--mono);font-size:48px;font-weight:600;line-height:1;font-variant-numeric:tabular-nums}
+.actions{display:flex;gap:10px;flex-wrap:wrap}
+.btn{min-height:52px;padding:0 20px;border-radius:8px;border:2px solid var(--ink);background:transparent;font-weight:600;font-size:16px;display:inline-flex;align-items:center;justify-content:center;gap:8px}
+.btn.sm{min-height:40px;padding:0 14px;font-size:14px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.go{background:var(--ok);border-color:var(--ok);color:#fff}
+.btn.danger{border-color:var(--bad);color:var(--bad)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+
+.banner{border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:8px}
+.banner.in{background:var(--run-bg);border:2px solid var(--run)}
+.banner.out{background:var(--ok-bg);border:2px solid var(--ok)}
+.banner.warn{background:var(--warn-bg);border:2px solid var(--warn)}
+.banner b{font-size:17px}
+
+.checks{display:flex;flex-direction:column;gap:6px}
+.chk{display:flex;gap:12px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:6px;background:var(--bg);min-height:48px}
+.chk input[type=checkbox]{width:22px;height:22px;min-height:0;accent-color:var(--ok)}
+.chk.on{border-color:var(--ok)}
+.chk.on span{color:var(--muted);text-decoration:line-through}
+.chk input[type=number]{width:90px;min-height:36px;margin-left:auto}
+
+.blockbox{border:2px solid var(--bad);border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:10px;background:var(--bad-bg)}
+.reasons{display:flex;gap:8px;flex-wrap:wrap}
+.reasons button{border:1px solid var(--bad);background:var(--panel);color:var(--bad);border-radius:6px;padding:10px 14px;font-weight:600}
+
+.notes{display:flex;flex-direction:column;gap:8px}
+.noteform{display:flex;gap:8px}
+.noteform input{flex:1;min-width:0}
+.log{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;font-size:13px;max-height:220px;overflow:auto}
+.log li{display:grid;grid-template-columns:auto 1fr;gap:10px;padding:6px 0;border-bottom:1px solid var(--line)}
+.log time{font-family:var(--mono);color:var(--muted)}
+
+.form{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px}
+.form label{display:flex;flex-direction:column;gap:4px;min-width:0}
+.form .full{grid-column:1/-1}
+.label-prev{display:flex;flex-direction:column;gap:10px;align-items:flex-start}
+.label-prev img{border:1px solid var(--line);border-radius:6px;width:100%;max-width:480px;background:#fff}
+.picklist{display:flex;flex-direction:column;gap:6px}
+
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:16px 0 24px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px 16px}
+.kpi b{display:block;font-family:var(--display);font-size:42px;line-height:1;font-weight:700;font-variant-numeric:tabular-nums}
+.kpi.alert b{color:var(--bad)}
+.board-wrap{overflow-x:auto;margin-bottom:28px}
+.board{display:grid;grid-template-columns:repeat(var(--cols),minmax(150px,1fr));gap:10px;min-width:calc(var(--cols)*158px)}
+.lane{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:6px}
+.lane h3{margin:0 0 4px;font-family:var(--display);font-size:16px;text-transform:uppercase;letter-spacing:.04em;display:flex;justify-content:space-between}
+.mini{border:1px solid var(--line);border-left:4px solid var(--line);border-radius:5px;padding:6px 8px;background:var(--bg);font-size:12px;text-align:left;width:100%;display:flex;flex-direction:column;gap:1px}
+.mini .id{font-family:var(--mono);font-weight:600;font-size:13px}
+.mini.proceso{border-left-color:var(--run)} .mini.pausa{border-left-color:var(--warn)} .mini.bloqueada{border-left-color:var(--bad)}
+.mini .cl{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.attn{display:flex;flex-direction:column;gap:8px}
+.attn-row{display:grid;grid-template-columns:110px 1fr auto;gap:12px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 14px}
+@media (max-width:560px){.attn-row{grid-template-columns:1fr}}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+th{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+td.num,th.num{text-align:right;font-family:var(--mono)}
+.section{margin-top:28px;display:flex;flex-direction:column;gap:10px}
+.import{background:var(--panel);border:1px dashed var(--muted);border-radius:8px;padding:16px;display:flex;flex-direction:column;gap:10px}
+.import code{font-family:var(--mono);font-size:12px;background:var(--bg);padding:2px 6px;border-radius:4px;overflow-wrap:anywhere}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:12px 18px;border-radius:8px;font-weight:500;z-index:10;max-width:calc(100% - 32px)}
+.toast.bad{background:var(--bad);color:#fff}
+@media (prefers-reduced-motion:no-preference){.toast{animation:up .2s ease-out}@keyframes up{from{transform:translate(-50%,10px);opacity:0}}}
+.qrgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.qrcard{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center}
+.qrcard img{width:100%;max-width:140px;aspect-ratio:1;background:#fff;padding:6px;border-radius:4px}
+.btn.xl{width:100%;min-height:76px;font-family:var(--display);font-size:28px;letter-spacing:.06em;text-transform:uppercase;border-radius:12px}
+.btn.stop{background:var(--bad);border-color:var(--bad);color:#fff}
+select.need{border:2px solid var(--accent)}
+.need-op{color:var(--warn);font-weight:600}
+.card.running{border-color:var(--run);box-shadow:inset 4px 0 0 var(--run)}
+.card .cr{display:flex;gap:6px;align-items:center}
+.card .tm{font-weight:600;font-size:16px;color:var(--run)}
+.card .cmpwrap{grid-column:1/-1}
+.cmpwrap{display:flex;flex-direction:column;gap:6px}
+.cmprow{font-size:14px}
+.cmp{position:relative;height:10px;background:var(--line);border-radius:5px;overflow:visible}
+.cmpwrap.big .cmp{height:16px;border-radius:8px}
+.cmp i{position:absolute;left:0;top:0;bottom:0;border-radius:inherit;background:var(--muted)}
+.cmp em{position:absolute;left:66.66%;top:-4px;bottom:-4px;width:3px;background:var(--ink);border-radius:2px}
+.cmp i.c-ok{background:var(--ok)} .cmp i.c-warn{background:var(--warn)} .cmp i.c-bad{background:var(--bad)}
+.cmptxt{font-size:13px;font-weight:600;color:var(--muted)}
+.cmptxt.c-ok,b.c-ok{color:var(--ok)} .cmptxt.c-warn,b.c-warn{color:var(--warn)} .cmptxt.c-bad,b.c-bad{color:var(--bad)}
+.timerbox{display:flex;flex-direction:column;gap:12px;background:var(--bg);border-radius:10px;padding:16px}
+.state-big .chip{font-size:15px;padding:5px 12px}
+.state-big{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.done-head{display:flex;gap:16px;align-items:center}
+.big-ok{width:56px;height:56px;border-radius:50%;background:var(--ok);color:#fff;display:grid;place-items:center;font-size:30px;font-weight:700;flex:none}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.stats div{background:var(--bg);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:2px}
+.stats b{font-family:var(--display);font-size:30px;line-height:1.1;font-variant-numeric:tabular-nums}
+.newstate{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:16px}
+details{border-top:1px solid var(--line);padding-top:12px}
+summary{cursor:pointer;font-weight:600;font-size:14px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);min-height:32px;display:flex;align-items:center}
+.work.idle{gap:10px}
+@media (max-width:820px){
+  .cols.has-panel .work{order:-1}
+  .st-head{align-items:center}
+  h1{font-size:30px}
+  .op select{min-width:0;width:44vw}
+  .scan{padding:10px;margin-bottom:14px}
+  .scan input{font-size:20px;min-height:52px;min-width:0}
+  .work{padding:16px}
+  .timer{font-size:44px}
+  .bar{gap:8px;padding:8px 12px}
+  .brand{font-size:18px}
+  .bar-r #clock{display:none}
+  .stats b{font-size:22px;white-space:nowrap}
+  .stats div{padding:10px 8px}
+}
+#qrtmp{position:absolute;left:-9999px;top:0}
+</style>
+</head><body>
+
+<header class="bar">
+  <div class="brand">Ingemad <span>·</span> Estaciones</div>
+  <nav class="tabs" id="tabs" aria-label="Estaciones"></nav>
+  <div class="bar-r"><span class="conn" id="conn">Conectando…</span><span class="mono" id="clock"></span></div>
+</header>
+<main id="view"></main>
+<div class="toast" id="toast" hidden></div>
+<div id="qrtmp" aria-hidden="true"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script>
+const STATIONS = [
+  {id:'rec', name:'Recepción', checks:['Pieza marcada con N° de OT','Medidas registradas (largo / Ø)','Estado de llegada revisado']},
+  {id:'lim', name:'Limpieza', checks:['Resina y suciedad retiradas','Pieza seca','Revisión visual de grietas']},
+  {id:'sol', name:'Soldadura', checks:['Extremos cortados a escuadra','Soldadura hecha','Recocido del cordón','Cordón rectificado']},
+  {id:'ins', name:'Insertos', checks:['Insertos dañados retirados','Insertos nuevos soldados',{t:'Insertos cambiados',num:true}]},
+  {id:'ten', name:'Tensionado', checks:['Planitud verificada','Tensionado / laminado','Control con regla']},
+  {id:'afi', name:'Afilado', checks:['Ángulo según ficha','Dientes afilados','Trabado / recalcado revisado']},
+  {id:'qc',  name:'Control', checks:['Medición final','Inspección visual OK','Etiqueta de aprobado']},
+  {id:'des', name:'Despacho', checks:['Embalado','Guía de despacho emitida','Cliente avisado']},
+];
+const ROUTES = {
+  'Sierra huincha':  ['rec','lim','sol','ten','afi','qc','des'],
+  'Sierra circular': ['rec','lim','ins','ten','afi','qc','des'],
+  'Afilado simple':  ['rec','lim','afi','qc','des'],
+};
+const OPERATORS = ['Juan Soto','Pedro Muñoz','Luis Rojas','Marcos Vera','Carla Díaz'];
+const BLOCK_REASONS = ['Falta material / insertos','Máquina detenida','Espera aprobación cliente','Pieza con grieta','Otro'];
+const S = id => STATIONS.find(s=>s.id===id);
+const COL = 'ordenes';
+const APP_URL = location.href.split('#')[0];
+const day = 864e5;
+
+/* ---------- state ---------- */
+let orders = new Map();          // id -> order (mutable clone)
+let db = null, dbState = 'connecting';
+let view = 'sup';
+let ui = {sel:null, blocking:false, newForm:false, created:null, picks:null, scanMsg:null};
+const local = (()=>{try{return JSON.parse(localStorage.getItem('ingemad-tablet')||'{}')}catch(e){return {}}})();
+function saveLocal(){try{localStorage.setItem('ingemad-tablet',JSON.stringify(local))}catch(e){}}
+try{const h=location.hash.slice(1); if(h==='sup'||S(h)){view=h; if(S(h)) ui.scanMsg={k:'in',t:`Estás en ${S(h).name}`,s:'Escribe el N° de OC para registrar una entrada, o toca un trabajo en curso para registrar la salida.'}} else if(local.view) view=local.view}catch(e){}
+
+const $ = s=>document.querySelector(s);
+const esc = s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const cur = o=>o.ruta[o.paso];
+const elapsed = o=>(o.acc||0)+(o.estado==='proceso'&&o.t0?Date.now()-o.t0:0);
+const fmt = ms=>{const s=Math.floor(ms/1000),h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=s%60;return (h?h+':':'')+String(m).padStart(h?2:1,'0')+':'+String(x).padStart(2,'0')};
+const fmtMin = ms=>Math.round(ms/6e4)+' min';
+const hhmm = t=>new Date(t).toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'});
+const isLate = o=>o.estado!=='despachada' && o.due < Date.now();
+const all = ()=>[...orders.values()];
+const active = ()=>all().filter(o=>o.estado!=='despachada');
+const atStation = id=>active().filter(o=>cur(o)===id).sort((a,b)=>(b.estado==='proceso')-(a.estado==='proceso')||(b.prio==='alta')-(a.prio==='alta')||a.due-b.due);
+const comingTo = id=>active().filter(o=>o.ruta[o.paso+1]===id && o.estado==='proceso');
+const stateLbl={cola:'En cola',proceso:'En proceso',pausa:'En pausa',bloqueada:'Bloqueada',despachada:'Despachada'};
+const chip = o=>`<span class="chip s-${o.estado}">${stateLbl[o.estado]}</span>`;
+function dueTxt(o){const diff=Math.round((new Date(o.due).setHours(0,0,0,0)-new Date().setHours(0,0,0,0))/day);
+  if(o.estado==='despachada') return '<span class="due">Despachada</span>';
+  if(diff<0) return `<span class="late">Atrasada ${-diff} d</span>`;
+  if(diff===0) return `<span class="${isLate(o)?'late':'due'}">Entrega hoy</span>`;
+  return `<span class="due">${diff===1?'Mañana':new Date(o.due).toLocaleDateString('es-CL',{weekday:'short',day:'numeric'})}</span>`}
+function toast(t,bad){const el=$('#toast');el.textContent=t;el.className='toast'+(bad?' bad':'');el.hidden=false;clearTimeout(toast.h);toast.h=setTimeout(()=>el.hidden=true,2600)}
+function log(o,x){o.log=[{t:Date.now(),x:x+(o.op?` · ${o.op}`:''),st:view},...(o.log||[])].slice(0,60)}
+
+/* ---------- db ---------- */
+const STORE='ingemad-demo-ordenes';
+const SEED_NOW=1791208961127, SEED=[{"id": "OT-2479", "oc": "7760", "cliente": "Maderas del Sur", "tipo": "Sierra circular", "medida": "Ø 500 mm · 48 Z", "cant": 2, "prio": "normal", "due": 1791234000000, "ruta": ["rec", "lim", "ins", "ten", "afi", "qc", "des"], "paso": 6, "estado": "despachada", "acc": 0, "t0": null, "op": null, "checks": {}, "tiempos": {"rec": 420000, "lim": 1140000, "ins": 3840000, "ten": 2400000, "afi": 3480000, "qc": 840000, "des": 600000}, "motivo": null, "ejemplo": true, "log": [{"t": 1791198161127, "x": "OT creada en Recepción (ejemplo)"}], "doneAt": 1791201761127}, {"id": "OT-2481", "oc": "45021", "cliente": "Aserradero Los Robles", "tipo": "Sierra huincha", "medida": "6,40 m × 5\"", "cant": 4, "prio": "alta", "due": 1791234000000, "ruta": ["rec", "lim", "sol", "ten", "afi", "qc", "des"], "paso": 3, "estado": "proceso", "acc": 720000, "t0": 1791207581127, "op": "Luis Rojas", "checks": {}, "tiempos": {"rec": 480000, "lim": 1320000, "sol": 2460000}, "motivo": null, "ejemplo": true, "log": [{"t": 1791198161127, "x": "OT creada en Recepción (ejemplo)"}]}, {"id": "OT-2482", "oc": "7781", "cliente": "Maderas del Sur", "tipo": "Sierra circular", "medida": "Ø 450 mm · 40 Z", "cant": 6, "prio": "normal", "due": 1791320400000, "ruta": ["rec", "lim", "ins", "ten", "afi", "qc", "des"], "paso": 2, "estado": "cola", "acc": 0, "t0": null, "op": null, "checks": {}, "tiempos": {"rec": 360000, "lim": 1080000}, "motivo": null, "ejemplo": true, "log": [{"t": 1791198161127, "x": "OT creada en Recepción (ejemplo)"}]}, {"id": "OT-2483", "oc": "3305", "cliente": "Forestal Ñuble", "tipo": "Sierra huincha", "medida": "4,20 m × 3\"", "cant": 10, "prio": "normal", "due": 1791406800000, "ruta": ["rec", "lim", "sol", "ten", "afi", "qc", "des"], "paso": 1, "estado": "proceso", "acc": 0, "t0": 1791208421127, "op": "Pedro Muñoz", "checks": {}, "tiempos": {"rec": 660000}, "motivo": null, "ejemplo": true, "log": [{"t": 1791198161127, "x": "OT creada en Recepción (ejemplo)"}]}, {"id": "OT-2484", "oc": "B-118", "cliente": "Barracas Talca", "tipo": "Afilado simple", "medida": "Ø 300 mm · 60 Z", "cant": 12, "prio": "normal", "due": 1791147600000, "ruta": ["rec", "lim", "afi", "qc", "des"], "paso": 2, "estado": "cola", "acc": 0, "t0": null, "op": null, "checks": {}, "tiempos": {"rec": 300000, "lim": 1500000}, "motivo": null, "ejemplo": true, "log": [{"t": 1791198161127, "x": "OT creada en Recepción (ejemplo)"}]}, {"id": "OT-2485", "oc": "45021", "cliente": "Aserradero Los Robles", "tipo": "Sierra huincha", "medida": "6,40 m × 5\"", "cant": 2, "prio": "alta", "due": 1791234000000, "ruta": ["rec", "lim", "sol", "ten", "afi", "qc", "des"], "paso": 4, "estado": "bloqueada", "acc": 1860000, "t0": null, "op": null, "checks": {}, "tiempos": {"rec": 420000, "lim": 900000, "sol": 2280000, "ten": 3120000}, "motivo": "Máquina detenida", "ejemplo": true, "log": [{"t": 1791198161127, "x": "OT creada en Recepción (ejemplo)"}]}, {"id": "OT-2486", "oc": "990", "cliente": "Muebles Araucanía", "tipo": "Sierra circular", "medida": "Ø 350 mm · 54 Z", "cant": 3, "prio": "normal", "due": 1791493200000, "ruta": ["rec", "lim", "ins", "ten", "afi", "qc", "des"], "paso": 0, "estado": "cola", "acc": 0, "t0": null, "op": null, "checks": {}, "tiempos": {}, "motivo": null, "ejemplo": true, "log": [{"t": 1791198161127, "x": "OT creada en Recepción (ejemplo)"}]}, {"id": "OT-2487", "oc": "3305", "cliente": "Forestal Ñuble", "tipo": "Sierra huincha", "medida": "4,20 m × 3\"", "cant": 8, "prio": "normal", "due": 1791406800000, "ruta": ["rec", "lim", "sol", "ten", "afi", "qc", "des"], "paso": 5, "estado": "pausa", "acc": 1080000, "t0": null, "op": "Juan Soto", "checks": {}, "tiempos": {"rec": 540000, "lim": 1200000, "sol": 2100000, "ten": 2820000, "afi": 3300000}, "motivo": null, "ejemplo": true, "log": [{"t": 1791198161127, "x": "OT creada en Recepción (ejemplo)"}]}, {"id": "OT-2488", "oc": "PO-5512", "cliente": "Constructora Biobío", "tipo": "Sierra circular", "medida": "Ø 250 mm · 24 Z", "cant": 5, "prio": "normal", "due": 1791579600000, "ruta": ["rec", "lim", "ins", "ten", "afi", "qc", "des"], "paso": 0, "estado": "cola", "acc": 0, "t0": null, "op": null, "checks": {}, "tiempos": {}, "motivo": null, "ejemplo": true, "log": [{"t": 1791198161127, "x": "OT creada en Recepción (ejemplo)"}]}, {"id": "OT-2489", "oc": "B-120", "cliente": "Barracas Talca", "tipo": "Afilado simple", "medida": "Ø 400 mm · 72 Z", "cant": 4, "prio": "normal", "due": 1791234000000, "ruta": ["rec", "lim", "afi", "qc", "des"], "paso": 4, "estado": "cola", "acc": 0, "t0": null, "op": null, "checks": {}, "tiempos": {"rec": 240000, "lim": 960000, "afi": 2880000, "qc": 720000}, "motivo": null, "ejemplo": true, "log": [{"t": 1791198161127, "x": "OT creada en Recepción (ejemplo)"}]}];
+function saveOrders(){try{localStorage.setItem(STORE,JSON.stringify([...orders.values()]))}catch(e){toast('No se pudo guardar en este equipo',true)}}
+function persist(o){orders.set(o.id,o);saveOrders()}
+function loadSeed(){
+  const d=Date.now()-SEED_NOW, dd=Math.round(d/day)*day;
+  return SEED.map(o=>{o=JSON.parse(JSON.stringify(o));if(o.t0)o.t0+=d;if(o.doneAt)o.doneAt+=d;o.due+=dd;(o.log||[]).forEach(l=>l.t+=d);return o});
+}
+function safeRender(){
+  const a=document.activeElement;
+  if(a&&(a.tagName==='TEXTAREA'||(a.tagName==='INPUT'&&!['checkbox','file'].includes(a.type)))&&a.value){clearTimeout(safeRender.h);safeRender.h=setTimeout(safeRender,1500);return}
+  render();
+}
+function connect(){
+  let list=null; try{list=JSON.parse(localStorage.getItem(STORE)||'null')}catch(e){}
+  if(!Array.isArray(list)){list=loadSeed();orders=new Map(list.map(o=>[o.id,o]));saveOrders()}
+  else orders=new Map(list.map(o=>[o.id,o]));
+  dbState='on'; render();
+}
+window.addEventListener('storage',e=>{if(e.key===STORE){try{orders=new Map(JSON.parse(e.newValue||'[]').map(o=>[o.id,o]))}catch(x){}safeRender()}});
+
+/* ---------- lookup ---------- */
+const norm = s=>String(s??'').trim().toUpperCase().replace(/^INGEMAD[:\s]*/,'').replace(/\s+/g,'');
+function lookup(raw){
+  const c=norm(raw); if(!c) return [];
+  const ot = /^\d+$/.test(c)?'OT-'+c : c.replace(/^OT(\d)/,'OT-$1');
+  if(orders.has(ot)) return [orders.get(ot)];
+  const oc=c.replace(/^OC-?/,'');
+  return all().filter(o=>norm(o.oc).replace(/^OC-?/,'')===oc)
+    .sort((a,b)=>(cur(b)===view)-(cur(a)===view)||(a.estado==='despachada')-(b.estado==='despachada'));
+}
+function stationFromCode(raw){
+  const t=String(raw||'').trim(); const m=t.match(/#([a-z]+)\s*$/i)||t.match(/^EST[:\-\s]*([a-z]+)$/i);
+  return m&&(S(m[1].toLowerCase())||m[1].toLowerCase()==='sup')?m[1].toLowerCase():null;
+}
+function handleScan(raw){
+  const st=stationFromCode(raw); if(st){go(st);ui.scanMsg={k:'in',t:`Estás en ${st==='sup'?'Supervisor':S(st).name}`,s:'Escribe el N° de OC u OT para registrar una entrada, o toca un trabajo en curso para registrar la salida.'};return render()}
+  const res=lookup(raw); ui.result=null; ui.blocking=false; ui.newForm=false; ui.created=null; ui.picks=null; ui.scanMsg=null; ui.notFound=null;
+  if(!res.length){ui.sel=null;ui.notFound=raw.trim();return render()}
+  if(res.length>1){ui.sel=null;ui.picks={q:raw.trim(),list:res};return render()}
+  openOrder(res[0]);
+}
+function openOrder(o){ui.sel=o.id; ui.picks=null; ui.scanMsg=null; render()}
+/* ---------- actions ---------- */
+function checksOk(o){const s=S(cur(o));return s.checks.every((c,i)=>{const v=(o.checks||{})[i];return typeof c==='object'?v!==undefined&&v!=='':!!v})}
+function entrada(o){o.op=local.op[view];o.estado='proceso';o.t0=Date.now();log(o,((o.acc||0)?'Reanuda ':'Entrada a ')+S(cur(o)).name);persist(o)}
+function salida(o){
+  const stn=cur(o); if(o.estado==='proceso'&&o.t0){o.acc=(o.acc||0)+Date.now()-o.t0;o.t0=null}
+  o.tiempos={...(o.tiempos||{}),[stn]:o.acc||0}; log(o,`Salida de ${S(stn).name} (${fmtMin(o.acc||0)})`);
+  o.acc=0;o.checks={};o.op=null;
+  let nx;
+  if(o.paso>=o.ruta.length-1){o.estado='despachada';o.doneAt=Date.now();nx='Despachada'}
+  else{o.paso++;o.estado='cola';nx=S(cur(o)).name}
+  persist(o); return nx;
+}
+
+/* ---------- render ---------- */
+function renderTabs(){
+  const tabs=[{id:'sup',name:'Supervisor'},...STATIONS];
+  $('#tabs').innerHTML=tabs.map(t=>`<button class="tab" data-tab="${t.id}" aria-current="${view===t.id}">${t.name}${t.id==='sup'?'':`<span class="n">${atStation(t.id).length}</span>`}</button>`).join('');
+  const c=$('#conn'); c.className='conn '+(dbState==='on'?'on':dbState==='off'?'off':''); c.textContent=dbState==='on'?'Maqueta · datos en este equipo':dbState==='off'?'Sin conexión a la base':'Conectando…';
+}
+const QR_ICO=`<svg class="qr-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 7V3h4M17 3h4v4M21 17v4h-4M7 21H3v-4"/><rect x="7" y="7" width="4" height="4" fill="currentColor" stroke="none"/><rect x="13" y="13" width="4" height="4" fill="currentColor" stroke="none"/><path d="M13 7h4v3M7 13v4h3"/></svg>`;
+
+/* ---------- averages ---------- */
+function avgFor(st,tipo){
+  const same=all().filter(o=>o.tipo===tipo).map(o=>(o.tiempos||{})[st]).filter(Boolean);
+  const any=all().map(o=>(o.tiempos||{})[st]).filter(Boolean);
+  const v=same.length>=2?same:any; if(!v.length) return null;
+  return {m:v.reduce((x,y)=>x+y,0)/v.length,n:v.length,scope:same.length>=2?tipo:'todas las OT'};
+}
+function cmpInfo(ms,a){
+  if(!a) return {k:'none',pct:null,txt:'Sin promedio todavía'};
+  const pct=ms/a.m, d=Math.round((ms-a.m)/6e4);
+  const k=pct<=1?'ok':pct<=1.25?'warn':'bad';
+  const txt=Math.abs(d)<1?'Igual al promedio':d<0?`${-d} min bajo el promedio`:`${d} min sobre el promedio (+${Math.round((pct-1)*100)}%)`;
+  return {k,pct,txt};
+}
+function cmpBar(o,big){
+  const a=avgFor(cur(o),o.tipo), ms=elapsed(o), c=cmpInfo(ms,a);
+  const w=c.pct==null?0:Math.min(c.pct,1.5)/1.5*100;
+  return `<div class="cmpwrap ${big?'big':''}" data-live="${o.id}" data-big="${big?1:''}">
+    ${big?`<div class="cmprow"><span>Promedio ${S(cur(o)).name.toLowerCase()}: <b>${a?fmtMin(a.m):'—'}</b>${a?` <span class="hint">(${a.n} OT · ${esc(a.scope)})</span>`:''}</span></div>`:''}
+    <div class="cmp"><i class="c-${c.k}" style="width:${w}%"></i>${a?'<em title="Promedio"></em>':''}</div>
+    <div class="cmptxt c-${c.k}">${c.txt}</div></div>`;
+}
+
+function renderStation(){
+  const s=S(view), list=atStation(view);
+  const sel=ui.sel?orders.get(ui.sel):null;
+  const op=local.op?.[view]||'';
+  const panel=ui.newForm?newForm():ui.notFound?notFoundPanel():ui.result?resultPanel():ui.created?createdPanel(ui.created):ui.picks?picksPanel():sel?work(sel,s):'';
+  $('#view').innerHTML=`
+  <div class="st-head">
+    <div><div class="label">Estación</div><h1>${s.name}</h1></div>
+    <label class="op"><span class="label">Operador</span>
+      <select id="op" class="${op?'':'need'}"><option value="">Elige tu nombre…</option>${OPERATORS.map(n=>`<option ${n===op?'selected':''}>${n}</option>`).join('')}</select></label>
+  </div>
+  <form class="scan" id="scanform" autocomplete="off">
+    <input id="scan" placeholder="N° de OT u OC" aria-label="Número de OT u OC" inputmode="numeric" enterkeyhint="search">
+    <button class="btn primary" type="submit">Buscar</button>
+  </form>
+  <div class="cols ${panel?'has-panel':''}">
+    <div class="queue">
+      <div class="qhead"><h2>Fila · ${s.name} <span class="mono hint">${list.length}</span></h2><button class="btn sm" id="newot">+ Agregar</button></div>
+      ${list.length?list.map(o=>card(o,sel)).join(''):`<div class="empty">${dbState==='on'?'No hay OT en la fila de esta estación.':'Cargando órdenes…'}</div>`}
+    </div>
+    ${panel||`<div class="work idle">${msgBanner()}<p style="margin:0">Escribe el <b>N° de OT u OC</b> arriba, o toca una OT de la fila.</p><p class="hint" style="margin:0">Iniciar marca la hora de entrada; Terminar registra el tiempo y pasa la OT a la siguiente estación.</p></div>`}
+  </div>`;
+}
+function card(o,sel){
+  const run=o.estado==='proceso';
+  return `<button class="card ${run?'running':''}" data-sel="${o.id}" aria-pressed="${!!sel&&sel.id===o.id}">
+    <span class="id">${o.id}</span><span class="cr">${run?`<span class="mono tm" data-tm="${o.id}">${fmt(elapsed(o))}</span>`:chip(o)}</span>
+    <span class="cl">${esc(o.cliente)}</span>
+    <span class="sp">OC ${esc(o.oc||'—')} · ${esc(o.tipo)} · ${esc(o.medida)} · ${o.cant} u.</span>
+    ${run?cmpBar(o,false):`<span class="ft">${o.prio==='alta'?'<span class="pri alta">Urgente</span>':''}${o.ejemplo?'<span class="ex">Ejemplo</span>':''}${o.manual?'<span class="ex">Agregada en taller</span>':''} ${dueTxt(o)}</span>`}
+    ${run&&o.op?`<span class="sp">${esc(o.op)}</span>`:''}</button>`;
+}
+function resultPanel(){
+  const r=ui.result, o=orders.get(r.id), c=cmpInfo(r.ms,r.avg);
+  return `<div class="work">
+    <div class="done-head"><span class="big-ok">✓</span><div><div class="label">Terminado en ${esc(r.stName)}</div><div class="w-id">${r.id}</div><div class="w-cl">${esc(o?.cliente||'')}</div></div></div>
+    <div class="stats">
+      <div><span class="label">Tiempo</span><b>${fmtMin(r.ms)}</b></div>
+      <div><span class="label">Promedio</span><b>${r.avg?fmtMin(r.avg.m):'—'}</b></div>
+      <div><span class="label">Diferencia</span><b class="c-${c.k}">${r.avg?(r.ms>=r.avg.m?'+':'−')+Math.abs(Math.round((r.ms-r.avg.m)/6e4))+' min':'—'}</b></div>
+    </div>
+    <div class="cmptxt c-${c.k}" style="font-size:16px">${c.txt}</div>
+    <div class="newstate"><span class="label">Nuevo estado</span>${o?chip(o):''}<b>${r.next==='Despachada'?'Despachada':'En la fila de '+esc(r.next)}</b></div>
+    <button class="btn xl primary" data-act="clearres">Siguiente OT</button></div>`;
+}
+function msgBanner(){const m=ui.scanMsg;if(!m)return '';return `<div class="banner ${m.k}"><b>${esc(m.t)}</b>${m.s?`<span>${esc(m.s)}</span>`:''}</div>`}
+function picksPanel(){
+  return `<div class="work"><div><div class="label">Orden de compra ${esc(ui.picks.q)}</div><h2>${ui.picks.list.length} OT asociadas</h2></div>
+    <p class="hint" style="margin:0">Elige la sierra que tienes en la mano.</p>
+    <div class="picklist">${ui.picks.list.map(o=>`<button class="card" data-pick="${o.id}"><span class="id">${o.id}</span>${chip(o)}<span class="cl">${esc(o.cliente)}</span><span class="sp">${esc(o.tipo)} · ${esc(o.medida)} · ${o.cant} u. · en ${o.estado==='despachada'?'—':S(cur(o)).name}</span></button>`).join('')}</div></div>`;
+}
+function work(o,s){
+  const here=cur(o)===view, done=o.estado==='despachada', opOk=!!local.op?.[view];
+  const next=o.ruta[o.paso+1], inRoute=o.ruta.includes(view);
+  let main='', sec='', warn='';
+  if(done) warn=`<div class="banner out"><b>Despachada ${o.doneAt?hhmm(o.doneAt):''}</b></div>`;
+  else if(!here){
+    warn=`<div class="banner warn"><b>Esta OT está en la fila de ${S(cur(o)).name}${o.estado==='proceso'?' (en proceso)':''}.</b><span>${inRoute?`Si la sierra ya está en ${s.name}, puedes iniciarla aquí. Las estaciones intermedias quedan sin tiempo.`:`${esc(o.tipo)} no pasa por ${s.name}.`}</span></div>`;
+    if(inRoute) main=`<button class="btn xl go" data-act="force" ${opOk?'':'disabled'}>▶ Iniciar aquí</button>`;
+  } else if(o.estado==='cola') main=`<button class="btn xl go" data-act="start" ${opOk?'':'disabled'}>▶ Iniciar</button>`;
+  else if(o.estado==='pausa') main=`<button class="btn xl go" data-act="start" ${opOk?'':'disabled'}>▶ Reanudar</button>`;
+  else if(o.estado==='proceso'){ main=`<button class="btn xl stop" data-act="finish">■ Terminar</button>`; sec=`<button class="btn" data-act="pause">Pausar</button><button class="btn danger" data-act="block">Bloquear</button>`}
+  else if(o.estado==='bloqueada'){ main=`<button class="btn xl primary" data-act="unblock">Desbloquear</button>` }
+  if(here&&(o.estado==='cola'||o.estado==='pausa')) sec=`<button class="btn danger" data-act="block">Bloquear</button>`;
+  const showTimer=here&&!done&&(o.estado==='proceso'||o.estado==='pausa'||o.estado==='bloqueada'||(o.acc||0)>0);
+  const a=here&&!done?avgFor(view,o.tipo):null;
+  const ck=o.checks||{}, editable=here&&o.estado==='proceso';
+  return `<section class="work ${o.estado==='bloqueada'?'blocked':''}" aria-label="OT ${o.id}">
+    ${msgBanner()}
+    <div class="w-top">
+      <div style="min-width:0"><div class="w-id">${o.id}</div><div class="w-cl">${esc(o.cliente)}</div></div>
+      <div class="state-big">${chip(o)}${o.prio==='alta'?'<span class="pri alta">Urgente</span>':''}${o.ejemplo?'<span class="ex">Ejemplo</span>':''}</div>
+    </div>
+    <div class="specs">
+      <div><span class="label">OC</span><b class="mono">${esc(o.oc||'—')}</b></div>
+      <div><span class="label">Servicio</span><b>${esc(o.tipo)}</b></div>
+      <div><span class="label">Medida</span><b class="mono">${esc(o.medida)}</b></div>
+      <div><span class="label">Cantidad</span><b>${o.cant} u.</b></div>
+      <div><span class="label">Entrega</span><b>${new Date(o.due).toLocaleDateString('es-CL',{day:'numeric',month:'short'})}</b>${dueTxt(o)}</div>
+    </div>
+    ${warn}
+    ${o.estado==='bloqueada'?`<div class="blockbox"><b>Bloqueada: ${esc(o.motivo)}</b></div>`:''}
+    ${showTimer?`<div class="timerbox"><div class="clock"><span class="timer" id="timer">${fmt(elapsed(o))}</span><span class="hint">${o.estado==='proceso'?'corriendo':'detenido'}${o.op?` · ${esc(o.op)}`:''}</span></div>${cmpBar(o,true)}</div>`
+      :here&&!done?`<div class="hint">Promedio en ${s.name.toLowerCase()}: <b>${a?fmtMin(a.m):'sin datos aún'}</b>${a?` (${a.n} OT · ${esc(a.scope)})`:''}</div>`:''}
+    ${ui.blocking?`<div class="blockbox"><b>¿Por qué se detiene?</b><div class="reasons">${BLOCK_REASONS.map(r=>`<button data-reason="${r}">${r}</button>`).join('')}</div><button class="linkbtn" data-act="cancelblock" style="align-self:flex-start;color:var(--bad)">Cancelar</button></div>`:''}
+    ${main}
+    ${main&&!opOk&&!done&&o.estado!=='proceso'&&o.estado!=='bloqueada'?'<div class="hint need-op">Elige tu nombre en Operador para iniciar.</div>':''}
+    ${here&&o.estado==='proceso'&&next?`<div class="hint">Al terminar pasa a la fila de <b>${S(next).name}</b>.</div>`:''}
+    ${sec?`<div class="actions">${sec}</div>`:''}
+    <details><summary>Ruta</summary>
+      <div class="route" style="margin-top:10px">${o.ruta.map((r,i)=>`<div class="rstep ${done||i<o.paso?'done':i===o.paso?'now':''}"><span class="dot"></span>${S(r).name}${(o.tiempos||{})[r]?`<small>${fmtMin(o.tiempos[r])}</small>`:''}</div>`).join('')}</div></details>
+    ${here&&!done?`<details><summary>Lista de control (opcional)</summary>
+      <div class="checks" style="margin-top:10px">${s.checks.map((c,i)=>typeof c==='object'
+        ?`<label class="chk ${ck[i]!==undefined&&ck[i]!==''?'on':''}"><span>${c.t}</span><input type="number" min="0" id="chk-${o.id}-${i}" data-num="${i}" value="${esc(ck[i]??'')}" ${editable?'':'disabled'}></label>`
+        :`<label class="chk ${ck[i]?'on':''}"><input type="checkbox" id="chk-${o.id}-${i}" data-chk="${i}" ${ck[i]?'checked':''} ${editable?'':'disabled'}><span>${c}</span></label>`).join('')}</div></details>`:''}
+    <details><summary>Bitácora</summary>
+      <form class="noteform" id="noteform" style="margin-top:10px"><input id="note" placeholder="Observación (ej. diente 14 con fisura)" autocomplete="off"><button class="btn sm">Agregar</button></form>
+      <ul class="log">${(o.log||[]).map(l=>`<li><time>${hhmm(l.t)}</time><span>${esc(l.x)}</span></li>`).join('')}</ul></details>
+  </section>`;
+}
+function notFoundPanel(){
+  const q=ui.notFound;
+  return `<div class="work"><div class="banner warn"><b>La orden “${esc(q)}” no está en la base.</b><span>Revisa que el número esté bien escrito. Si la sierra ya está en el taller, agrégala aquí y queda disponible para todas las estaciones.</span></div>
+    <div class="actions"><button class="btn primary" data-act="addfound">Agregar orden ${esc(q)}</button><button class="btn" data-act="cancelnew">Buscar otro número</button></div></div>`;
+}
+function newForm(){
+  const tom=new Date(Date.now()+2*day).toISOString().slice(0,10), pf=ui.prefill||{};
+  const op=local.op?.[view];
+  return `<form class="work" id="otform"><div><div class="label">Agregar orden · ${S(view).name}</div><h2>Datos de la orden</h2></div>
+    <div class="form">
+      <label><span class="label">N° OC cliente</span><input id="f-oc" value="${esc(pf.oc||'')}" placeholder="Ej. 45021" class="mono"></label>
+      <label><span class="label">N° OT (Random)</span><input id="f-ot" value="${esc(pf.ot||'')}" placeholder="Vacío = ${nextId()}" class="mono"></label>
+      <label class="full"><span class="label">Cliente</span><input id="f-cl" required placeholder="Nombre del cliente"></label>
+      <label><span class="label">Servicio</span><select id="f-tipo">${Object.keys(ROUTES).map(k=>`<option>${k}</option>`).join('')}</select></label>
+      <label><span class="label">Medida</span><input id="f-med" required placeholder='6,40 m × 5" / Ø 450 mm'></label>
+      <label><span class="label">Cantidad</span><input id="f-cant" type="number" min="1" value="1" required></label>
+      <label><span class="label">Entrega</span><input id="f-due" type="date" value="${tom}" required></label>
+      <label><span class="label">Prioridad</span><select id="f-pri"><option value="normal">Normal</option><option value="alta">Urgente</option></select></label>
+      ${view!=='rec'?`<label class="chk full"><input type="checkbox" id="f-in" ${op?'checked':'disabled'}><span>Registrar entrada a ${S(view).name} ahora${op?` (${esc(op)})`:' — elige operador arriba'}</span></label>`:''}
+    </div>
+    <div class="hint" id="f-route"></div>
+    <div class="hint">Las órdenes agregadas desde el taller quedan marcadas para que la oficina las verifique en Random.</div>
+    <div class="actions"><button class="btn primary" type="submit">Agregar orden</button><button class="btn" type="button" data-act="cancelnew">Cancelar</button></div>
+  </form>`;
+}
+function createdPanel(id){
+  return `<div class="work"><div class="banner out"><b>${id} creada</b><span>${(()=>{const o=orders.get(id);return o?(o.estado==='proceso'?`Entrada registrada en ${S(cur(o)).name}.`:`Quedó en la cola de ${S(cur(o)).name}.`):''})()} Anota el N° de OT en la sierra para identificarla.</span></div>
+    <div class="actions"><button class="btn primary" data-sel="${id}">Abrir OT</button><button class="btn" id="newot">Agregar otra</button></div></div>`;
+}
+function nextId(){const n=all().map(o=>+String(o.id).replace(/\D/g,'')).filter(Boolean);return 'OT-'+((n.length?Math.max(...n):2480)+1)}
+
+/* ---------- supervisor ---------- */
+function renderSup(){
+  const a=active(), today=new Date().setHours(0,0,0,0);
+  const blocked=a.filter(o=>o.estado==='bloqueada'), late=a.filter(isLate);
+  const shipped=all().filter(o=>o.estado==='despachada'&&o.doneAt>=today);
+  const attn=[...new Set([...blocked,...late])];
+  const ex=all().filter(o=>o.ejemplo).length;
+  const avg=STATIONS.map(s=>{const v=all().map(o=>(o.tiempos||{})[s.id]).filter(Boolean);return {s,n:v.length,m:v.length?v.reduce((x,y)=>x+y,0)/v.length:0,q:atStation(s.id).length}});
+  const bott=avg.reduce((b,x)=>x.q>b.q?x:b,avg[0]);
+  $('#view').innerHTML=`
+  <div class="st-head"><div><div class="label">Vista general</div><h1>Taller hoy</h1>
+    <div class="sub">${new Date().toLocaleDateString('es-CL',{weekday:'long',day:'numeric',month:'long'})}</div></div>
+    <button class="btn sm" data-act="resetdemo">${ui.confirmReset?'Confirmar: reiniciar maqueta':'Reiniciar maqueta'}</button>
+    ${ex?`<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span class="hint">${ex} OT de ejemplo cargadas</span><button class="btn sm" data-act="clearex">${ui.confirmClear?'Confirmar: borrar ejemplos':'Borrar ejemplos'}</button></div>`:''}</div>
+  ${dbState==='off'?'<div class="banner warn" style="margin-bottom:16px"><b>Sin conexión a la base de datos.</b><span>Recarga la página.</span></div>':''}
+  <div class="kpis">
+    <div class="kpi"><span class="label">OT en taller</span><b>${a.length}</b></div>
+    <div class="kpi"><span class="label">En proceso</span><b>${a.filter(o=>o.estado==='proceso').length}</b></div>
+    <div class="kpi ${blocked.length?'alert':''}"><span class="label">Bloqueadas</span><b>${blocked.length}</b></div>
+    <div class="kpi ${late.length?'alert':''}"><span class="label">Atrasadas</span><b>${late.length}</b></div>
+    <div class="kpi"><span class="label">Despachadas hoy</span><b>${shipped.length}</b></div>
+  </div>
+  <h2 style="margin-bottom:10px">Flujo por estación</h2>
+  <div class="board-wrap"><div class="board" style="--cols:${STATIONS.length}">
+    ${STATIONS.map(s=>{const l=atStation(s.id);return `<div class="lane"><h3>${s.name}<span class="mono">${l.length}</span></h3>
+      ${l.map(o=>`<button class="mini ${o.estado}" data-go="${s.id}" data-sel="${o.id}"><span class="id">${o.id}${o.prio==='alta'?' ▲':''}</span><span class="cl">${esc(o.cliente)}</span><span>${stateLbl[o.estado]}${o.estado==='proceso'?' · '+fmt(elapsed(o)):''}</span></button>`).join('')||'<span class="hint">Vacía</span>'}
+    </div>`}).join('')}
+  </div></div>
+  <div class="section"><h2>Requiere atención</h2>
+    ${attn.length?`<div class="attn">${attn.map(o=>`<div class="attn-row"><span class="mono"><b>${o.id}</b></span>
+      <span>${esc(o.cliente)} · OC ${esc(o.oc||'—')} · en <b>${S(cur(o)).name}</b>${o.estado==='bloqueada'?` · <span class="late">${esc(o.motivo)}</span>`:''}</span>
+      <span style="display:flex;gap:6px;align-items:center">${chip(o)} ${dueTxt(o)}</span></div>`).join('')}</div>`
+      :'<div class="empty">No hay OT bloqueadas ni atrasadas.</div>'}
+  </div>
+  ${(()=>{const mm=all().filter(o=>o.manual);return mm.length?`<div class="section"><h2>Agregadas desde el taller</h2>
+    <p class="hint" style="margin:0">No venían de la base. Verifica que existan en Random y márcalas como revisadas.</p>
+    <div class="attn">${mm.map(o=>`<div class="attn-row"><span class="mono"><b>${o.id}</b></span><span>${esc(o.cliente)} · OC ${esc(o.oc||'—')} · ${esc((o.log||[]).slice(-1)[0]?.x||'')}</span><button class="btn sm" data-act="reviewed" data-id="${o.id}">Marcar revisada</button></div>`).join('')}</div></div>`:''})()}
+  <div class="section"><h2>Tiempos por estación</h2>
+    <div style="overflow-x:auto"><table><thead><tr><th>Estación</th><th class="num">En cola</th><th class="num">OT terminadas</th><th class="num">Tiempo prom.</th></tr></thead>
+    <tbody>${avg.map(x=>`<tr><td>${x.s.name}${x===bott&&x.q>1?' <span class="pri alta">Cuello de botella</span>':''}</td><td class="num">${x.q}</td><td class="num">${x.n}</td><td class="num">${x.n?fmtMin(x.m):'–'}</td></tr>`).join('')}</tbody></table></div>
+    <div class="hint">Los tiempos salen de la diferencia entre el escaneo de entrada y el de salida en cada estación.</div>
+  </div>
+  <div class="section"><h2>QR de estaciones</h2>
+    <p class="hint" style="margin:0">Imprime y pega cada QR en su estación. Al escanearlo con la cámara del celular se abre esta página directamente en esa estación. Los QR apuntan a la dirección donde está publicada esta página.</p>
+    <div class="qrgrid">${STATIONS.map(s=>`<div class="qrcard"><img data-qr="${s.id}" alt="QR de ${s.name}"><b>${s.name}</b><button class="btn sm" data-act="dlqr" data-id="${s.id}">Descargar</button></div>`).join('')}</div>
+    <div><button class="btn sm primary" data-act="dlsheet">Descargar hoja con todos (A4)</button></div>
+  </div>
+  <div class="section"><h2>Cargar órdenes desde el ERP</h2>
+    <div class="import">
+      <span>Maqueta: cada equipo guarda sus propios datos; los cambios no se comparten entre celulares. Exporta las OT abiertas desde Random a CSV y súbelas aquí. Las OT que ya existen se actualizan con los datos del archivo sin perder su avance en el taller.</span>
+      <span class="hint">Columnas: <code>OT;OC;Cliente;Servicio;Medida;Cantidad;Entrega;Prioridad</code> · Servicio = Sierra huincha, Sierra circular o Afilado simple · Entrega en formato dd-mm-aaaa.</span>
+      <label class="btn sm filebtn" style="align-self:flex-start">Subir CSV<input type="file" id="csv" accept=".csv,text/csv"></label>
+    </div>
+  </div>`;
+}
+
+function render(){renderTabs(); view==='sup'?renderSup():renderStation(); updRoute(); fillQR()}
+function go(v){view=v;local.view=v;saveLocal();ui={result:null,sel:null,blocking:false,newForm:false,created:null,picks:null,scanMsg:null};try{history.replaceState(null,'','#'+v)}catch(e){}render();window.scrollTo(0,0)}
+function updRoute(){const t=$('#f-tipo'),r=$('#f-route');if(!t||!r)return;const ru=ROUTES[t.value];r.textContent='Ruta: '+ru.map(x=>S(x).name).join(' → ')+(ru.includes(view)?(view!=='rec'?` · parte en ${S(view).name}`:''):` · ${t.value} no pasa por ${S(view).name}: parte en Recepción`);const fi=$('#f-in');if(fi&&!ru.includes(view)){fi.checked=false;fi.disabled=true}else if(fi&&local.op?.[view])fi.disabled=false}
+
+/* ---------- station QR ---------- */
+const qrCache={};
+function qrCanvas(text,size){
+  const key=text+'|'+size; if(qrCache[key]) return qrCache[key];
+  if(typeof QRCode==='undefined') return null;
+  const tmp=$('#qrtmp'); tmp.innerHTML=''; new QRCode(tmp,{text,width:size,height:size,correctLevel:QRCode.CorrectLevel.M});
+  const c=tmp.querySelector('canvas'); if(!c) return null;
+  const out=document.createElement('canvas');out.width=out.height=size;out.getContext('2d').drawImage(c,0,0);
+  return qrCache[key]=out;
+}
+const stUrl=id=>APP_URL+'#'+id;
+function fillQR(){document.querySelectorAll('img[data-qr]').forEach(i=>{const c=qrCanvas(stUrl(i.dataset.qr),220);if(c&&!i.src)i.src=c.toDataURL('image/png')})}
+function poster(g,s,x,y,w,h){
+  g.fillStyle='#fff';g.fillRect(x,y,w,h);g.strokeStyle='#1b2326';g.lineWidth=Math.max(3,w/200);g.strokeRect(x+g.lineWidth/2,y+g.lineWidth/2,w-g.lineWidth,h-g.lineWidth);
+  g.fillStyle='#f0b400';g.fillRect(x,y,w,h*0.16);
+  g.fillStyle='#1b2326';g.textAlign='center';
+  g.font=`700 ${Math.round(h*0.07)}px "Barlow Condensed", Arial Narrow, sans-serif`;g.fillText('INGEMAD · ESTACIÓN',x+w/2,y+h*0.11);
+  g.font=`700 ${Math.round(h*0.11)}px "Barlow Condensed", Arial Narrow, sans-serif`;g.fillText(s.name.toUpperCase(),x+w/2,y+h*0.29);
+  const q=Math.min(w*0.62,h*0.52); const c=qrCanvas(stUrl(s.id),512); if(c){g.imageSmoothingEnabled=false;g.drawImage(c,x+(w-q)/2,y+h*0.34,q,q)}
+  g.font=`500 ${Math.round(h*0.035)}px "IBM Plex Sans", Arial, sans-serif`;g.fillText('Escanea al entrar y al salir',x+w/2,y+h*0.93);
+  g.textAlign='left';
+}
+function save(canvas,filename){
+  canvas.toBlob(b=>{const u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),2000);toast('Descargado')},'image/png');
+}
+function downloadStation(id){const c=document.createElement('canvas');c.width=1240;c.height=1754;poster(c.getContext('2d'),S(id),0,0,1240,1754);save(c,`qr-estacion-${S(id).name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')}.png`)}
+function downloadSheet(){const W=1240,H=1754,c=document.createElement('canvas');c.width=W;c.height=H;const g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,W,H);
+  const cw=W/2,ch=H/4;STATIONS.forEach((s,i)=>poster(g,s,(i%2)*cw+12,Math.floor(i/2)*ch+12,cw-24,ch-24));save(c,'qr-estaciones-ingemad.png')}
+
+/* ---------- CSV import ---------- */
+function parseCSV(text){
+  const sep=(text.split('\n')[0].match(/;/g)||[]).length>=(text.split('\n')[0].match(/,/g)||[]).length?';':',';
+  const rows=[];let row=[],f='',q=false;
+  for(let i=0;i<text.length;i++){const ch=text[i];
+    if(q){if(ch==='"'){if(text[i+1]==='"'){f+='"';i++}else q=false}else f+=ch}
+    else if(ch==='"')q=true; else if(ch===sep){row.push(f);f=''} else if(ch==='\n'){row.push(f);rows.push(row);row=[];f=''} else if(ch!=='\r')f+=ch}
+  if(f||row.length){row.push(f);rows.push(row)} return rows.filter(r=>r.some(x=>x.trim()));
+}
+function importCSV(text){
+  const rows=parseCSV(text); if(rows.length<2) return toast('El archivo no tiene filas',true);
+  const H=rows[0].map(h=>h.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''));
+  const ix=k=>H.findIndex(h=>h.startsWith(k));
+  const I={ot:ix('ot'),oc:ix('oc'),cl:ix('cliente'),tipo:ix('servicio'),med:ix('medida'),cant:ix('cantidad'),due:ix('entrega'),pri:ix('prioridad')};
+  if(I.ot<0||I.cl<0) return toast('Faltan columnas OT y Cliente',true);
+  let n=0,skip=0;
+  rows.slice(1).forEach(r=>{
+    const raw=norm(r[I.ot]); if(!raw){skip++;return}
+    const id=/^\d+$/.test(raw)?'OT-'+raw:raw.replace(/^OT(\d)/,'OT-$1');
+    if(!/^[A-Z0-9_.~:@+-]+$/.test(id)){skip++;return}
+    const tipo=Object.keys(ROUTES).find(k=>k.toLowerCase()===String(r[I.tipo]||'').trim().toLowerCase())||'Sierra huincha';
+    let due=Date.now()+2*day; const dm=String(r[I.due]||'').trim().match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{2,4})$/);
+    if(dm){due=new Date(+(dm[3].length===2?'20'+dm[3]:dm[3]),+dm[2]-1,+dm[1],18).getTime()}
+    const base={oc:String(r[I.oc]??'').trim(),cliente:String(r[I.cl]).trim(),tipo,medida:String(r[I.med]??'').trim(),cant:+r[I.cant]||1,
+      due,prio:/urg|alta/i.test(r[I.pri]||'')?'alta':'normal'};
+    const ex=orders.get(id);
+    const o=ex?{...ex,...base,ruta:ex.tipo===tipo?ex.ruta:ROUTES[tipo]}:{id,...base,ruta:ROUTES[tipo],paso:0,estado:'cola',acc:0,t0:null,op:null,checks:{},tiempos:{},motivo:null,log:[{t:Date.now(),x:'Importada desde ERP'}]};
+    if(ex&&ex.tipo!==tipo&&o.paso>=o.ruta.length)o.paso=0;
+    persist(o); n++;
+  });
+  toast(`${n} OT cargadas${skip?` · ${skip} filas omitidas`:''}`); render();
+}
+
+/* ---------- events ---------- */
+document.addEventListener('click',e=>{
+  const t=e.target.closest('button'); if(!t) return;
+  if(t.dataset.tab) return go(t.dataset.tab);
+  if(t.dataset.go){go(t.dataset.go);ui.sel=t.dataset.sel;return render()}
+  if(t.dataset.pick){const o=orders.get(t.dataset.pick);if(o)openOrder(o,true);return}
+  if(t.dataset.sel){ui={sel:t.dataset.sel,blocking:false,newForm:false,created:null,picks:null,scanMsg:null};render();if(matchMedia('(max-width:820px)').matches)scrollTo({top:$('.work')?.offsetTop-70||0,behavior:'smooth'});return}
+  if(t.id==='newot'){ui={sel:null,newForm:true,prefill:{}};return render()}
+  if(t.dataset.act==='addfound'){const q=norm(ui.notFound);const isOT=/^OT-?\d+$/.test(q);ui={sel:null,newForm:true,prefill:isOT?{ot:q.replace(/^OT(\d)/,'OT-$1')}:{oc:ui.notFound}};return render()}
+  const a=t.dataset.act;
+  if(a==='clearres'){ui.result=null;render();setTimeout(()=>$('#scan')?.focus(),0);return}
+  if(a==='cancelnew'){ui.newForm=false;ui.notFound=null;ui.prefill=null;return render()}
+  if(a==='dlqr') return downloadStation(t.dataset.id);
+  if(a==='reviewed'){const r=orders.get(t.dataset.id);if(r){r.manual=false;log(r,'Verificada en Random');persist(r);toast(`${r.id} revisada`);render()}return}
+  if(a==='dlsheet') return downloadSheet();
+  if(a==='clearex'){
+    if(!ui.confirmClear){ui.confirmClear=true;return render()}
+    ui.confirmClear=false; all().filter(o=>o.ejemplo).forEach(o=>orders.delete(o.id));saveOrders();toast('Ejemplos borrados');return render()}
+  if(a==='resetdemo'){if(!ui.confirmReset){ui.confirmReset=true;return render()}ui.confirmReset=false;orders=new Map(loadSeed().map(o=>[o.id,o]));saveOrders();toast('Maqueta reiniciada');return go('sup')}
+  const o=ui.sel&&orders.get(ui.sel); if(!o) return;
+  ui.scanMsg=null;
+  if(t.dataset.reason){ if(o.estado==='proceso'&&o.t0){o.acc=(o.acc||0)+Date.now()-o.t0;o.t0=null}
+    o.estado='bloqueada';o.motivo=t.dataset.reason;ui.blocking=false;log(o,'Bloqueada: '+o.motivo);persist(o);toast(`${o.id} bloqueada`)}
+  else if(a==='start'){entrada(o);ui.scanMsg={k:'in',t:`Iniciado ${hhmm(Date.now())}`}}
+  else if(a==='force'){const i=o.ruta.indexOf(view); if(i>=0){log(o,`Ingreso forzado a ${S(view).name} (estaba en ${S(cur(o)).name})`);o.paso=i;o.acc=0;o.t0=null;o.checks={};entrada(o);ui.scanMsg={k:'in',t:`Iniciado ${hhmm(Date.now())}`}}}
+  else if(a==='pause'){o.acc=(o.acc||0)+Date.now()-o.t0;o.t0=null;o.estado='pausa';log(o,'Pausa');persist(o)}
+  else if(a==='block'){ui.blocking=true}
+  else if(a==='cancelblock'){ui.blocking=false}
+  else if(a==='unblock'){o.estado='pausa';o.motivo=null;log(o,'Desbloqueada');persist(o)}
+  else if(a==='finish'){const st=cur(o),ms=elapsed(o),avg=avgFor(st,o.tipo);const nx=salida(o);ui.sel=null;ui.result={id:o.id,ms,avg,next:nx,stName:S(st).name}}
+  render();
+});
+document.addEventListener('change',e=>{
+  const t=e.target;
+  if(t.id==='op'){local.op={...(local.op||{}),[view]:t.value};saveLocal();return render()}
+  if(t.id==='f-tipo') return updRoute();
+  if(t.id==='csv'&&t.files[0]){const r=new FileReader();r.onload=()=>importCSV(String(r.result));r.readAsText(t.files[0]);return}
+  const o=ui.sel&&orders.get(ui.sel); if(!o) return;
+  if(t.dataset.chk!==undefined){o.checks={...(o.checks||{}),[t.dataset.chk]:t.checked};persist(o);render()}
+  if(t.dataset.num!==undefined){o.checks={...(o.checks||{}),[t.dataset.num]:t.value};persist(o);render()}
+});
+document.addEventListener('submit',e=>{
+  e.preventDefault();
+  if(e.target.id==='scanform'){const v=$('#scan').value;if(v.trim())handleScan(v);return}
+  if(e.target.id==='noteform'){const v=$('#note').value.trim();const o=ui.sel&&orders.get(ui.sel);if(v&&o){log(o,v);persist(o);render()}return}
+  if(e.target.id==='otform'){
+    const tipo=$('#f-tipo').value, ru=ROUTES[tipo];
+    let id=norm($('#f-ot').value); if(id){id=/^\d+$/.test(id)?'OT-'+id:id.replace(/^OT(\d)/,'OT-$1')} else id=nextId();
+    if(!/^[A-Z0-9_.~:@+-]+$/.test(id)) return toast('El N° de OT solo puede tener letras, números y guiones',true);
+    if(orders.has(id)) return toast(`${id} ya existe en la base`,true);
+    const paso=Math.max(0,ru.indexOf(view));
+    const o={id,oc:$('#f-oc').value.trim(),cliente:$('#f-cl').value.trim(),tipo,medida:$('#f-med').value.trim(),cant:+$('#f-cant').value,prio:$('#f-pri').value,
+      due:new Date($('#f-due').value+'T18:00').getTime(),ruta:ru,paso,estado:'cola',acc:0,t0:null,op:null,checks:{},tiempos:{},motivo:null,
+      manual:view!=='rec',log:[{t:Date.now(),x:view==='rec'?'OT creada en Recepción':`Agregada desde ${S(view).name} (no estaba en la base)`+(local.op?.[view]?` · ${local.op[view]}`:'')}]};
+    const fi=$('#f-in');
+    if(fi&&fi.checked&&ru[paso]===view){orders.set(o.id,o);entrada(o)} else persist(o);
+    ui={sel:null,newForm:false,created:id}; render(); toast(`${id} agregada`);
+  }
+});
+
+let n=0;
+function tick(){
+  $('#clock').textContent=new Date().toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'});
+  const tm=$('#timer'),o=ui.sel&&orders.get(ui.sel);
+  if(tm&&o) tm.textContent=fmt(elapsed(o));
+  document.querySelectorAll('[data-tm]').forEach(el=>{const x=orders.get(el.dataset.tm);if(x)el.textContent=fmt(elapsed(x))});
+  if(n%5===0) document.querySelectorAll('[data-live]').forEach(el=>{const x=orders.get(el.dataset.live);if(x&&x.estado==='proceso'){const t=document.createElement('div');t.innerHTML=cmpBar(x,!!el.dataset.big);el.replaceWith(t.firstElementChild)}});
+  n++;
+  if(view==='sup'&&n%10===0){const y=scrollY;renderSup();fillQR();scrollTo(0,y)}
+}
+window.addEventListener('hashchange',()=>{const h=location.hash.slice(1);if((h==='sup'||S(h))&&h!==view)go(h)});
+render(); tick(); setInterval(tick,1000); connect();
+</script>
+
+</body></html>
