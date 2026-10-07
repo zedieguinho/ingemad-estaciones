@@ -231,6 +231,16 @@ summary{cursor:pointer;font-weight:600;font-size:14px;text-transform:uppercase;l
   .stats b{font-size:22px;white-space:nowrap}
   .stats div{padding:10px 8px}
 }
+.scan .photo{white-space:nowrap}
+@media (max-width:820px){.scan .photo{flex-basis:100%}}
+.ocr-prev{display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap}
+.ocr-prev img{width:140px;max-width:40%;border-radius:8px;border:1px solid var(--line);object-fit:cover}
+.ocr-side{flex:1;min-width:180px;display:flex;flex-direction:column;gap:8px}
+.cands{display:flex;flex-wrap:wrap;gap:6px}
+.cand{font-family:var(--mono);font-weight:600;font-size:16px;padding:8px 12px;border-radius:6px;border:1px solid var(--line);background:var(--bg);min-height:40px}
+.cand.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.form textarea,#otform textarea{width:100%;font-family:var(--mono);font-size:13px;resize:vertical}
+.ocrtxt{white-space:pre-wrap;font-family:var(--mono);font-size:12px;max-height:200px;overflow:auto;background:var(--bg);padding:10px;border-radius:6px;margin:8px 0 0}
 #qrtmp{position:absolute;left:-9999px;top:0}
 </style>
 </head><body>
@@ -391,7 +401,7 @@ function renderStation(){
   const s=S(view), list=atStation(view);
   const sel=ui.sel?orders.get(ui.sel):null;
   const op=local.op?.[view]||'';
-  const panel=ui.newForm?newForm():ui.notFound?notFoundPanel():ui.result?resultPanel():ui.created?createdPanel(ui.created):ui.picks?picksPanel():sel?work(sel,s):'';
+  const panel=ui.ocr?ocrPanel():ui.newForm?newForm():ui.notFound?notFoundPanel():ui.result?resultPanel():ui.created?createdPanel(ui.created):ui.picks?picksPanel():sel?work(sel,s):'';
   $('#view').innerHTML=`
   <div class="st-head">
     <div><div class="label">Estación</div><h1>${s.name}</h1></div>
@@ -401,6 +411,7 @@ function renderStation(){
   <form class="scan" id="scanform" autocomplete="off">
     <input id="scan" placeholder="N° de OT u OC" aria-label="Número de OT u OC" inputmode="numeric" enterkeyhint="search">
     <button class="btn primary" type="submit">Buscar</button>
+    <label class="btn filebtn photo">📷 Foto de OT<input type="file" id="otphoto" accept="image/*" capture="environment"></label>
   </form>
   <div class="cols ${panel?'has-panel':''}">
     <div class="queue">
@@ -416,7 +427,7 @@ function card(o,sel){
     <span class="id">${o.id}</span><span class="cr">${run?`<span class="mono tm" data-tm="${o.id}">${fmt(elapsed(o))}</span>`:chip(o)}</span>
     <span class="cl">${esc(o.cliente)}</span>
     <span class="sp">OC ${esc(o.oc||'—')} · ${esc(o.tipo)} · ${esc(o.medida)} · ${o.cant} u.</span>
-    ${run?cmpBar(o,false):`<span class="ft">${o.prio==='alta'?'<span class="pri alta">Urgente</span>':''}${o.ejemplo?'<span class="ex">Ejemplo</span>':''}${o.manual?'<span class="ex">Agregada en taller</span>':''} ${dueTxt(o)}</span>`}
+    ${run?cmpBar(o,false):`<span class="ft">${o.prio==='alta'?'<span class="pri alta">Urgente</span>':''}${o.ejemplo?'<span class="ex">Ejemplo</span>':''}${o.photo?'<span class="ex">Desde foto</span>':o.manual?'<span class="ex">Agregada en taller</span>':''} ${dueTxt(o)}</span>`}
     ${run&&o.op?`<span class="sp">${esc(o.op)}</span>`:''}</button>`;
 }
 function resultPanel(){
@@ -466,6 +477,7 @@ function work(o,s){
       <div><span class="label">Medida</span><b class="mono">${esc(o.medida)}</b></div>
       <div><span class="label">Cantidad</span><b>${o.cant} u.</b></div>
       <div><span class="label">Entrega</span><b>${new Date(o.due).toLocaleDateString('es-CL',{day:'numeric',month:'short'})}</b>${dueTxt(o)}</div>
+      ${o.detalle?`<div style="grid-column:1/-1"><span class="label">Detalle OT</span><b style="white-space:pre-line;font-weight:500">${esc(o.detalle)}</b></div>`:''}
     </div>
     ${warn}
     ${o.estado==='bloqueada'?`<div class="blockbox"><b>Bloqueada: ${esc(o.motivo)}</b></div>`:''}
@@ -495,19 +507,26 @@ function notFoundPanel(){
 function newForm(){
   const tom=new Date(Date.now()+2*day).toISOString().slice(0,10), pf=ui.prefill||{};
   const op=local.op?.[view];
-  return `<form class="work" id="otform"><div><div class="label">Agregar orden · ${S(view).name}</div><h2>Datos de la orden</h2></div>
+  const ph=pf.photo, toRec=!!pf.forceRec;
+  return `<form class="work" id="otform"><div><div class="label">Agregar orden · ${toRec?'va a Recepción':S(view).name}</div><h2>${ph?'Revisa los datos leídos':'Datos de la orden'}</h2></div>
+    ${ph?`<div class="ocr-prev"><img src="${ph}" alt="Foto de la OT"><div class="ocr-side">
+      ${pf.cands&&pf.cands.length?`<span class="label">Números encontrados · toca el N° de OT</span><div class="cands">${pf.cands.map(c=>`<button type="button" class="cand ${c===pf.ot?'on':''}" data-cand="${esc(c)}">${esc(c)}</button>`).join('')}</div>`:'<span class="hint">No encontré números claros. Escribe el N° de OT a mano.</span>'}
+      ${pf.fecha||pf.vendedor?`<span class="hint">${pf.fecha?`OT del ${esc(pf.fecha)}`:''}${pf.fecha&&pf.vendedor?' · ':''}${pf.vendedor?`Vendedor ${esc(pf.vendedor)}`:''}</span>`:''}
+      <span class="hint">Revisa sobre todo <b>cliente y medida</b>: la letra a mano y las fotos inclinadas se leen con errores. La orden queda en la fila de <b>Recepción</b>.</span></div></div>
+    ${pf.items&&pf.items.length?`<label class="full" style="display:flex;flex-direction:column;gap:4px"><span class="label">Detalle leído (${pf.items.length} ${pf.items.length>1?'ítems':'ítem'})</span><textarea id="f-det" rows="${Math.min(4,pf.items.length+1)}">${esc(pf.items.map(x=>`${x.cant} × ${x.desc}`).join('\n'))}</textarea></label>`:''}`:''}
     <div class="form">
-      <label><span class="label">N° OC cliente</span><input id="f-oc" value="${esc(pf.oc||'')}" placeholder="Ej. 45021" class="mono"></label>
+      <label><span class="label">N° OC / Nota de venta</span><input id="f-oc" value="${esc(pf.oc||'')}" placeholder="Ej. 45021" class="mono"></label>
       <label><span class="label">N° OT (Random)</span><input id="f-ot" value="${esc(pf.ot||'')}" placeholder="Vacío = ${nextId()}" class="mono"></label>
-      <label class="full"><span class="label">Cliente</span><input id="f-cl" required placeholder="Nombre del cliente"></label>
-      <label><span class="label">Servicio</span><select id="f-tipo">${Object.keys(ROUTES).map(k=>`<option>${k}</option>`).join('')}</select></label>
-      <label><span class="label">Medida</span><input id="f-med" required placeholder='6,40 m × 5" / Ø 450 mm'></label>
-      <label><span class="label">Cantidad</span><input id="f-cant" type="number" min="1" value="1" required></label>
+      <label class="full"><span class="label">Cliente</span><input id="f-cl" required placeholder="Nombre del cliente" value="${esc(pf.cliente||'')}"></label>
+      <label><span class="label">Servicio</span><select id="f-tipo">${Object.keys(ROUTES).map(k=>`<option ${pf.tipo===k?'selected':''}>${k}</option>`).join('')}</select></label>
+      <label><span class="label">Medida</span><input id="f-med" required placeholder='6,40 m × 5" / Ø 450 mm' value="${esc(pf.medida||'')}"></label>
+      <label><span class="label">Cantidad</span><input id="f-cant" type="number" min="1" value="${pf.cant||1}" required></label>
       <label><span class="label">Entrega</span><input id="f-due" type="date" value="${tom}" required></label>
       <label><span class="label">Prioridad</span><select id="f-pri"><option value="normal">Normal</option><option value="alta">Urgente</option></select></label>
-      ${view!=='rec'?`<label class="chk full"><input type="checkbox" id="f-in" ${op?'checked':'disabled'}><span>Registrar entrada a ${S(view).name} ahora${op?` (${esc(op)})`:' — elige operador arriba'}</span></label>`:''}
+      ${view!=='rec'&&!toRec?`<label class="chk full"><input type="checkbox" id="f-in" ${op?'checked':'disabled'}><span>Registrar entrada a ${S(view).name} ahora${op?` (${esc(op)})`:' — elige operador arriba'}</span></label>`:''}
     </div>
     <div class="hint" id="f-route"></div>
+    ${ph&&pf.text?`<details><summary>Texto leído de la foto</summary><pre class="ocrtxt">${esc(pf.text)}</pre></details>`:''}
     <div class="hint">Las órdenes agregadas desde el taller quedan marcadas para que la oficina las verifique en Random.</div>
     <div class="actions"><button class="btn primary" type="submit">Agregar orden</button><button class="btn" type="button" data-act="cancelnew">Cancelar</button></div>
   </form>`;
@@ -640,10 +659,84 @@ function importCSV(text){
   toast(`${n} OT cargadas${skip?` · ${skip} filas omitidas`:''}`); render();
 }
 
+/* ---------- OCR foto de OT ---------- */
+let tessP=null;
+function loadTess(){
+  if(window.Tesseract) return Promise.resolve();
+  if(!tessP) tessP=new Promise((ok,ko)=>{const sc=document.createElement('script');sc.src='https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';sc.onload=ok;sc.onerror=()=>{tessP=null;ko(new Error('net'))};document.head.appendChild(sc)});
+  return tessP;
+}
+function prepImage(file){
+  return new Promise((ok,ko)=>{const u=URL.createObjectURL(file),im=new Image();
+    im.onload=()=>{const sc=Math.min(1,1800/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=Math.round(im.width*sc);c.height=Math.round(im.height*sc);
+      const g=c.getContext('2d');g.filter='grayscale(1) contrast(1.4)';g.drawImage(im,0,0,c.width,c.height);URL.revokeObjectURL(u);
+      const t=document.createElement('canvas'),ts=Math.min(1,520/Math.max(c.width,c.height));t.width=c.width*ts;t.height=c.height*ts;t.getContext('2d').drawImage(im,0,0,t.width,t.height);
+      ok({canvas:c,thumb:t.toDataURL('image/jpeg',.7)})};
+    im.onerror=()=>ko(new Error('img'));im.src=u});
+}
+function parseOT(text){
+  const T=String(text).replace(/\r/g,'');
+  const U=T.toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  const lines=T.split('\n').map(l=>l.trim()).filter(Boolean);
+  const UL=lines.map(l=>l.toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,''));
+  // N° OT: número largo con ceros a la izquierda (formato Random) o junto a "ORDEN DE TRABAJO"
+  let otRaw=(U.match(/ORDEN\s*DE\s*TRABAJO\D{0,25}?(\d[\d ]{4,13}\d)/)||[])[1]||(U.match(/\b(0{2,}\d{4,10})\b/)||[])[1]||'';
+  otRaw=otRaw.replace(/\s/g,'');
+  const ot=otRaw.replace(/^0+/,'');
+  const nv=(U.match(/NOTA\s*(?:DE\s*)?VENTA\s*:?\s*(\d{3,})/)||[])[1]||'';
+  const oc=(U.match(/\bO\.?\s?C\.?\s*(?:N[°ºO.]*)?\s*:?\s*(\d{3,})/)||[])[1]||'';
+  const vend=(U.match(/VENDEDOR\s*:?\s*([A-Z]{2,5})\b/)||[])[1]||'';
+  const MES={ENERO:1,FEBRERO:2,MARZO:3,ABRIL:4,MAYO:5,JUNIO:6,JULIO:7,AGOSTO:8,SEPTIEMBRE:9,SETIEMBRE:9,PTIEMBRE:9,OCTUBRE:10,NOVIEMBRE:11,DICIEMBRE:12};
+  let fecha='', fi=-1;
+  UL.forEach((l,i)=>{if(fi<0&&/SANTIAGO|\b20\d\d\b/.test(l)&&/\bDE\b/.test(l)){const m=l.match(/(\d{1,2})\s*DE\s*([A-Z]+)\s*(?:DE\s*|D\s*E?\s*)?(20\d\d)?/);if(m){fi=i;const mm=Object.keys(MES).find(k=>m[2].includes(k)||k.endsWith(m[2])&&m[2].length>4);if(mm)fecha=`${m[1]}-${MES[mm]}-${m[3]||new Date().getFullYear()}`}}});
+  // cliente: línea "CLIENTE :" o la línea siguiente a la fecha
+  let cliente='';
+  const ci=UL.findIndex(l=>/CLIENTE\s*:/.test(l));
+  const raw=ci>=0?lines[ci].replace(/^.*?CLIENTE\s*:\s*/i,''):(fi>=0&&lines[fi+1]?lines[fi+1]:'');
+  cliente=raw.split(/\s(?:VENDEDOR|NRO\.?\s*NOTA|NOTA\s*VENTA)/i)[0].replace(/^[^A-Za-z0-9ÁÉÍÓÚÑ]+/,'').replace(/\s{2,}/g,' ').trim().slice(0,60);
+  // ítems
+  const KW=/(AFILADO|SOLDADURA|SOLDAR|REPARACION|REPARAR|CAMBIO|TENSIONADO|RECTIFICADO|LAMINADO|TRABADO|INSERTO|DIENTE|SIERRA|HUINCHA|CINTA)/;
+  const items=[];
+  UL.forEach((l,i)=>{const k=l.search(KW);if(k<0||/CODIGO|DESCRIPCION/.test(l))return;
+    let desc=lines[i].slice(k).replace(/\s+[-—_|;:.,]*\s*$/,'');
+    desc=desc.replace(/\b2\s*=\s*(\d)/g,'Z=$1').replace(/\bZ\s*=\s*/gi,'Z=');
+    if(!/SIERRA|AFILADO|SOLDAD|HUINCHA|CINTA/i.test(desc))return;
+    const q=(l.slice(0,k).match(/^\D{0,2}(\d{1,3})\b/)||[])[1];
+    const D=desc.toUpperCase();
+    let dia=(D.match(/\bDE\s+(\d{2,4})\b/)||[])[1]; if(dia&&(+dia<100||+dia>1200))dia=undefined; const z=(D.match(/Z=(\d{1,3})/)||[])[1];
+    items.push({cant:q?+q:1,desc:desc.slice(0,80),dia,z,tp:/\bTP\b/.test(D),pcd:/PCD/.test(D)});
+  });
+  const D=items.map(x=>x.desc.toUpperCase()).join(' ');
+  const tipo=/SOLDAD|HUINCHA|CINTA/.test(D)?'Sierra huincha':/INSERTO|DIENTE|REPARA|CAMBIO/.test(D)?'Sierra circular':/AFILADO/.test(D)?'Afilado simple':'';
+  const medida=items.map(x=>[x.dia?`Ø ${x.dia} mm`:'',x.z?`${x.z} Z`:'',x.tp?'TP':'',x.pcd?'PCD':''].filter(Boolean).join(' ')).filter(Boolean).join(' / ');
+  const cant=items.reduce((a,x)=>a+x.cant,0)||'';
+  const nums=[...new Set((U.match(/\b\d{4,12}\b/g)||[]).map(n=>n.replace(/^0+/,'')).filter(n=>n.length>=4&&!/^20\d\d$/.test(n)))];
+  const cands=[...new Set([ot,...nums].filter(Boolean))].slice(0,6);
+  return {ot,oc:oc||nv,vendedor:vend,fecha,cliente,items,tipo,medida,cant,cands};
+}
+async function readOTPhoto(file){
+  ui={sel:null,ocr:{pct:0,msg:'Preparando foto…'}};render();
+  let img;try{img=await prepImage(file)}catch(e){ui.ocr=null;render();return toast('No se pudo abrir la foto',true)}
+  ui.ocr.thumb=img.thumb;ui.ocr.msg='Cargando lector de texto…';render();
+  try{await loadTess()}catch(e){ui={sel:null,newForm:true,prefill:{photo:img.thumb,forceRec:true,cands:[]}};render();return toast('Sin internet para leer la foto: completa los datos a mano',true)}
+  try{
+    const r=await Tesseract.recognize(img.canvas,'spa',{logger:m=>{if(m.status==='recognizing text'&&ui.ocr){ui.ocr.pct=Math.round(m.progress*100);ui.ocr.msg='Leyendo la OT…';const b=$('#ocrbar');if(b)b.style.width=ui.ocr.pct+'%';const t=$('#ocrmsg');if(t)t.textContent=`Leyendo la OT… ${ui.ocr.pct}%`}}});
+    const text=r.data.text||'', d=parseOT(text);
+    const ex=d.ot&&(orders.get('OT-'+d.ot)||orders.get(d.ot));
+    if(ex){ui={sel:ex.id,ocr:null,scanMsg:{k:'in',t:`${ex.id} ya está en la base`,s:'La abrí para que la trabajes.'}};return render()}
+    ui={sel:null,ocr:null,newForm:true,prefill:{...d,text,photo:img.thumb,forceRec:true}};render();
+    toast(d.ot?`Leí la OT ${d.ot}: revisa cliente y medida`:'No encontré el N° de OT: elígelo o escríbelo');
+  }catch(e){ui={sel:null,newForm:true,prefill:{photo:img.thumb,forceRec:true,cands:[]}};render();toast('No pude leer la foto: completa los datos a mano',true)}
+}
+function ocrPanel(){const o=ui.ocr;return `<div class="work"><div class="ocr-prev">${o.thumb?`<img src="${o.thumb}" alt="Foto de la OT">`:''}<div class="ocr-side"><h2>Foto de OT</h2>
+  <span id="ocrmsg">${esc(o.msg)}${o.pct?` ${o.pct}%`:''}</span><div class="cmp big"><i id="ocrbar" class="c-ok" style="width:${o.pct}%"></i></div>
+  <span class="hint">La primera vez tarda un poco más porque descarga el lector.</span></div></div></div>`}
+
 /* ---------- events ---------- */
 document.addEventListener('click',e=>{
   const t=e.target.closest('button'); if(!t) return;
   if(t.dataset.tab) return go(t.dataset.tab);
+  if(t.dataset.cand){const f=$('#f-ot');if(f)f.value=t.dataset.cand;document.querySelectorAll('.cand').forEach(b=>b.classList.toggle('on',b===t));if(ui.prefill)ui.prefill.ot=t.dataset.cand;return}
   if(t.dataset.go){go(t.dataset.go);ui.sel=t.dataset.sel;return render()}
   if(t.dataset.pick){const o=orders.get(t.dataset.pick);if(o)openOrder(o,true);return}
   if(t.dataset.sel){ui={sel:t.dataset.sel,blocking:false,newForm:false,created:null,picks:null,scanMsg:null};render();if(matchMedia('(max-width:820px)').matches)scrollTo({top:$('.work')?.offsetTop-70||0,behavior:'smooth'});return}
@@ -676,6 +769,7 @@ document.addEventListener('change',e=>{
   const t=e.target;
   if(t.id==='op'){local.op={...(local.op||{}),[view]:t.value};saveLocal();return render()}
   if(t.id==='f-tipo') return updRoute();
+  if(t.id==='otphoto'&&t.files[0]){const f=t.files[0];t.value='';return readOTPhoto(f)}
   if(t.id==='csv'&&t.files[0]){const r=new FileReader();r.onload=()=>importCSV(String(r.result));r.readAsText(t.files[0]);return}
   const o=ui.sel&&orders.get(ui.sel); if(!o) return;
   if(t.dataset.chk!==undefined){o.checks={...(o.checks||{}),[t.dataset.chk]:t.checked};persist(o);render()}
@@ -690,10 +784,11 @@ document.addEventListener('submit',e=>{
     let id=norm($('#f-ot').value); if(id){id=/^\d+$/.test(id)?'OT-'+id:id.replace(/^OT(\d)/,'OT-$1')} else id=nextId();
     if(!/^[A-Z0-9_.~:@+-]+$/.test(id)) return toast('El N° de OT solo puede tener letras, números y guiones',true);
     if(orders.has(id)) return toast(`${id} ya existe en la base`,true);
-    const paso=Math.max(0,ru.indexOf(view));
+    const toRec=!!(ui.prefill&&ui.prefill.forceRec);
+    const paso=toRec?0:Math.max(0,ru.indexOf(view));
     const o={id,oc:$('#f-oc').value.trim(),cliente:$('#f-cl').value.trim(),tipo,medida:$('#f-med').value.trim(),cant:+$('#f-cant').value,prio:$('#f-pri').value,
       due:new Date($('#f-due').value+'T18:00').getTime(),ruta:ru,paso,estado:'cola',acc:0,t0:null,op:null,checks:{},tiempos:{},motivo:null,
-      manual:view!=='rec',log:[{t:Date.now(),x:view==='rec'?'OT creada en Recepción':`Agregada desde ${S(view).name} (no estaba en la base)`+(local.op?.[view]?` · ${local.op[view]}`:'')}]};
+      photo:toRec||undefined,detalle:($('#f-det')?.value||'').trim()||undefined,fechaOT:ui.prefill?.fecha||undefined,vendedor:ui.prefill?.vendedor||undefined,manual:view!=='rec'||toRec,log:[{t:Date.now(),x:toRec?`Creada desde foto de OT (${S(view).name})`+(local.op?.[view]?` · ${local.op[view]}`:''):view==='rec'?'OT creada en Recepción':`Agregada desde ${S(view).name} (no estaba en la base)`+(local.op?.[view]?` · ${local.op[view]}`:'')}]};
     const fi=$('#f-in');
     if(fi&&fi.checked&&ru[paso]===view){orders.set(o.id,o);entrada(o)} else persist(o);
     ui={sel:null,newForm:false,created:id}; render(); toast(`${id} agregada`);
