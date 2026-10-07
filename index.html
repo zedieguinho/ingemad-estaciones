@@ -276,6 +276,9 @@ const BLOCK_REASONS = ['Falta material / insertos','Máquina detenida','Espera a
 const S = id => STATIONS.find(s=>s.id===id);
 const COL = 'ordenes';
 const APP_URL = location.href.split('#')[0];
+/* Conexión a BBDD Servicios 2026 (Google Apps Script). Pega aquí la URL /exec y la clave del script. */
+const BBDD_URL_DEF = 'https://script.google.com/macros/s/AKfycbxSx5cUKInVwh8LUEDjElN-gipJtHuPr16a-6qnXx_Zraw5BV9tlKQw2_eIQtY3FjQo4g/exec';
+const BBDD_KEY_DEF = 'ing-54b27fd4a4d9';
 const day = 864e5;
 
 /* ---------- state ---------- */
@@ -285,7 +288,7 @@ let view = 'sup';
 let ui = {sel:null, blocking:false, newForm:false, created:null, picks:null, scanMsg:null};
 const local = (()=>{try{return JSON.parse(localStorage.getItem('ingemad-tablet')||'{}')}catch(e){return {}}})();
 function saveLocal(){try{localStorage.setItem('ingemad-tablet',JSON.stringify(local))}catch(e){}}
-try{const h=location.hash.slice(1); if(h==='sup'||S(h)){view=h; if(S(h)) ui.scanMsg={k:'in',t:`Estás en ${S(h).name}`,s:'Escribe el N° de OC para registrar una entrada, o toca un trabajo en curso para registrar la salida.'}} else if(local.view) view=local.view}catch(e){}
+try{const h=location.hash.slice(1); if(h==='sup'||S(h)){view=h; if(S(h)) ui.scanMsg={k:'in',t:`Estás en ${S(h).name}`,s:'Escribe el N° de OT para registrar una entrada, o toca un trabajo en curso para registrar la salida.'}} else if(local.view) view=local.view}catch(e){}
 
 const $ = s=>document.querySelector(s);
 const esc = s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -331,24 +334,62 @@ function connect(){
 }
 window.addEventListener('storage',e=>{if(e.key===STORE){try{orders=new Map(JSON.parse(e.newValue||'[]').map(o=>[o.id,o]))}catch(x){}safeRender()}});
 
+/* ---------- BBDD Drive ---------- */
+const bbddCfg=()=>({url:(local.bbddUrl||BBDD_URL_DEF||'').trim(),key:(local.bbddKey||BBDD_KEY_DEF||'').trim()});
+const bbddOn=()=>!!bbddCfg().url;
+async function bbddGet(params){
+  const c=bbddCfg(); if(!c.url) throw new Error('sin_config');
+  const u=c.url+(c.url.includes('?')?'&':'?')+new URLSearchParams({...params,token:c.key}).toString();
+  const ctl=new AbortController(), to=setTimeout(()=>ctl.abort(),15000);
+  try{const r=await fetch(u,{signal:ctl.signal});const j=await r.json();if(!j.ok)throw new Error(j.error||'error');return j}finally{clearTimeout(to)}
+}
+async function bbddPost(body){
+  const c=bbddCfg(); if(!c.url) throw new Error('sin_config');
+  const r=await fetch(c.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({...body,token:c.key})});
+  const j=await r.json(); if(!j.ok) throw new Error(j.error||'error'); return j;
+}
+function codigoDe(desc){const D=String(desc).toUpperCase();
+  if(/CAMBIO\s+TOTAL/.test(D))return 'I1AFS CT'; if(/CAMBIO|PLACA/.test(D))return 'I1AFS CP';
+  if(/INCISOR/.test(D))return 'I1AFS I'; if(/FRESA/.test(D))return 'I1AFF'; if(/CUCHILLO/.test(D))return 'I1AFC';
+  if(/AFILADO/.test(D))return 'I1AFS'; return '';}
+function tipoDe(items){const D=items.map(x=>(x.servicio||'')+' '+(x.detalle||'')+' '+(x.codigo||'')).join(' ').toUpperCase();
+  return /SOLDAD|HUINCHA|CINTA/.test(D)?'Sierra huincha':/CAMBIO|PLACA| CP\b| CT\b/.test(D)?'Sierra circular':'Afilado simple';}
+function medidaDe(desc){const D=String(desc).toUpperCase();let dia=(D.match(/\bDE\s+(\d{2,4})\b/)||D.match(/\bD\s?(\d{2,4})\b/)||[])[1];const z=(D.match(/Z\s*=\s*(\d{1,3})/)||[])[1];
+  return [dia?`Ø ${dia} mm`:'',z?`${z} Z`:'',/\bTP\b/.test(D)?'TP':'',/PCD/.test(D)?'PCD':''].filter(Boolean).join(' ');}
+function orderFromBBDD(d,station){
+  const ru=ROUTES[tipoDe(d.items)], tipo=tipoDe(d.items);
+  const i=ru.indexOf(station);
+  const fecha=d.fecha?new Date(d.fecha+'T12:00:00').getTime():Date.now();
+  return {id:'OT-'+d.ot,cliente:d.cliente,tipo,medida:[...new Set(d.items.map(x=>medidaDe(x.detalle)).filter(Boolean))].join(' / ')||'—',
+    cant:d.items.reduce((a,x)=>a+(+x.cant||1),0),prio:'normal',due:fecha+(tipo==='Afilado simple'?4:10)*day,fechaOT:d.fecha,ruta:ru,paso:i>=0?i:0,estado:'cola',acc:0,t0:null,op:null,checks:{},tiempos:{},motivo:null,
+    bbdd:true,detalle:d.items.map(x=>`${x.cant} × ${x.detalle}`).join('\n'),
+    log:[{t:Date.now(),x:`Traída de base de prueba en ${S(i>=0?station:ru[0]).name}`+(local.op?.[station]?` · ${local.op[station]}`:'')}]};
+}
+const fechaISO=f=>{const m=String(f||'').match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);return m?`${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`:/^\d{4}-\d\d-\d\d$/.test(f||'')?f:''};
+
 /* ---------- lookup ---------- */
 const norm = s=>String(s??'').trim().toUpperCase().replace(/^INGEMAD[:\s]*/,'').replace(/\s+/g,'');
 function lookup(raw){
   const c=norm(raw); if(!c) return [];
   const ot = /^\d+$/.test(c)?'OT-'+c : c.replace(/^OT(\d)/,'OT-$1');
   if(orders.has(ot)) return [orders.get(ot)];
-  const oc=c.replace(/^OC-?/,'');
-  return all().filter(o=>norm(o.oc).replace(/^OC-?/,'')===oc)
-    .sort((a,b)=>(cur(b)===view)-(cur(a)===view)||(a.estado==='despachada')-(b.estado==='despachada'));
+  const n=ot.replace(/^OT-0*/,'OT-'); return orders.has(n)?[orders.get(n)]:[];
 }
 function stationFromCode(raw){
   const t=String(raw||'').trim(); const m=t.match(/#([a-z]+)\s*$/i)||t.match(/^EST[:\-\s]*([a-z]+)$/i);
   return m&&(S(m[1].toLowerCase())||m[1].toLowerCase()==='sup')?m[1].toLowerCase():null;
 }
 function handleScan(raw){
-  const st=stationFromCode(raw); if(st){go(st);ui.scanMsg={k:'in',t:`Estás en ${st==='sup'?'Supervisor':S(st).name}`,s:'Escribe el N° de OC u OT para registrar una entrada, o toca un trabajo en curso para registrar la salida.'};return render()}
-  const res=lookup(raw); ui.result=null; ui.blocking=false; ui.newForm=false; ui.created=null; ui.picks=null; ui.scanMsg=null; ui.notFound=null;
-  if(!res.length){ui.sel=null;ui.notFound=raw.trim();return render()}
+  const st=stationFromCode(raw); if(st){go(st);ui.scanMsg={k:'in',t:`Estás en ${st==='sup'?'Supervisor':S(st).name}`,s:'Escribe el N° de OT para registrar una entrada, o toca un trabajo en curso para registrar la salida.'};return render()}
+  const res=lookup(raw); ui.result=null; ui.blocking=false; ui.newForm=false; ui.created=null; ui.picks=null; ui.scanMsg=null; ui.notFound=null; ui.bbddErr=false;
+  if(!res.length){
+    const q=norm(raw).replace(/^OT-?/,'').replace(/^0+/,'');
+    if(bbddOn()&&/^\d+$/.test(q)){ui.sel=null;ui.loading=`Buscando OT ${q} en base de prueba…`;render();
+      bbddGet({action:'ot',ot:q}).then(d=>{ui.loading=null;
+        if(d.found){const st=view==='sup'?'rec':view;const o=orderFromBBDD(d,st);persist(o);ui.sel=o.id;ui.scanMsg={k:'in',t:`OT ${q} traída de base de prueba`,s:o.ruta.includes(st)?`Quedó en la fila de ${S(st).name}.`:`${o.tipo} no pasa por ${S(st).name}: quedó en Recepción.`};render()}
+        else{ui.notFound=q;render()}
+      }).catch(e=>{ui.loading=null;ui.notFound=q;ui.bbddErr=true;render()});return}
+    ui.sel=null;ui.notFound=q||raw.trim();return render()}
   if(res.length>1){ui.sel=null;ui.picks={q:raw.trim(),list:res};return render()}
   openOrder(res[0]);
 }
@@ -401,7 +442,7 @@ function renderStation(){
   const s=S(view), list=atStation(view);
   const sel=ui.sel?orders.get(ui.sel):null;
   const op=local.op?.[view]||'';
-  const panel=ui.ocr?ocrPanel():ui.newForm?newForm():ui.notFound?notFoundPanel():ui.result?resultPanel():ui.created?createdPanel(ui.created):ui.picks?picksPanel():sel?work(sel,s):'';
+  const panel=ui.loading?`<div class="work"><div class="banner in"><b>${esc(ui.loading)}</b></div></div>`:ui.ocr?ocrPanel():ui.newForm?newForm():ui.notFound?notFoundPanel():ui.result?resultPanel():ui.created?createdPanel(ui.created):ui.picks?picksPanel():sel?work(sel,s):'';
   $('#view').innerHTML=`
   <div class="st-head">
     <div><div class="label">Estación</div><h1>${s.name}</h1></div>
@@ -409,7 +450,7 @@ function renderStation(){
       <select id="op" class="${op?'':'need'}"><option value="">Elige tu nombre…</option>${OPERATORS.map(n=>`<option ${n===op?'selected':''}>${n}</option>`).join('')}</select></label>
   </div>
   <form class="scan" id="scanform" autocomplete="off">
-    <input id="scan" placeholder="N° de OT u OC" aria-label="Número de OT u OC" inputmode="numeric" enterkeyhint="search">
+    <input id="scan" placeholder="N° de OT" aria-label="Número de OT" inputmode="numeric" enterkeyhint="search">
     <button class="btn primary" type="submit">Buscar</button>
     <label class="btn filebtn photo">📷 Foto de OT<input type="file" id="otphoto" accept="image/*" capture="environment"></label>
   </form>
@@ -418,7 +459,7 @@ function renderStation(){
       <div class="qhead"><h2>Fila · ${s.name} <span class="mono hint">${list.length}</span></h2><button class="btn sm" id="newot">+ Agregar</button></div>
       ${list.length?list.map(o=>card(o,sel)).join(''):`<div class="empty">${dbState==='on'?'No hay OT en la fila de esta estación.':'Cargando órdenes…'}</div>`}
     </div>
-    ${panel||`<div class="work idle">${msgBanner()}<p style="margin:0">Escribe el <b>N° de OT u OC</b> arriba, o toca una OT de la fila.</p><p class="hint" style="margin:0">Iniciar marca la hora de entrada; Terminar registra el tiempo y pasa la OT a la siguiente estación.</p></div>`}
+    ${panel||`<div class="work idle">${msgBanner()}<p style="margin:0">Escribe el <b>N° de OT</b> arriba, o toca una OT de la fila.</p><p class="hint" style="margin:0">Iniciar marca la hora de entrada; Terminar registra el tiempo y pasa la OT a la siguiente estación.</p></div>`}
   </div>`;
 }
 function card(o,sel){
@@ -426,8 +467,8 @@ function card(o,sel){
   return `<button class="card ${run?'running':''}" data-sel="${o.id}" aria-pressed="${!!sel&&sel.id===o.id}">
     <span class="id">${o.id}</span><span class="cr">${run?`<span class="mono tm" data-tm="${o.id}">${fmt(elapsed(o))}</span>`:chip(o)}</span>
     <span class="cl">${esc(o.cliente)}</span>
-    <span class="sp">OC ${esc(o.oc||'—')} · ${esc(o.tipo)} · ${esc(o.medida)} · ${o.cant} u.</span>
-    ${run?cmpBar(o,false):`<span class="ft">${o.prio==='alta'?'<span class="pri alta">Urgente</span>':''}${o.ejemplo?'<span class="ex">Ejemplo</span>':''}${o.photo?'<span class="ex">Desde foto</span>':o.manual?'<span class="ex">Agregada en taller</span>':''} ${dueTxt(o)}</span>`}
+    <span class="sp">${esc(o.tipo)} · ${esc(o.medida)} · ${o.cant} u.</span>
+    ${run?cmpBar(o,false):`<span class="ft">${o.prio==='alta'?'<span class="pri alta">Urgente</span>':''}${o.ejemplo?'<span class="ex">Ejemplo</span>':''}${o.bbddPend?'<span class="ex" style="color:var(--bad);border-color:var(--bad)">Envío pendiente</span>':o.photo?'<span class="ex">Desde foto</span>':o.bbdd?'':o.manual?'<span class="ex">Ingresada en taller</span>':''} ${dueTxt(o)}</span>`}
     ${run&&o.op?`<span class="sp">${esc(o.op)}</span>`:''}</button>`;
 }
 function resultPanel(){
@@ -472,7 +513,7 @@ function work(o,s){
       <div class="state-big">${chip(o)}${o.prio==='alta'?'<span class="pri alta">Urgente</span>':''}${o.ejemplo?'<span class="ex">Ejemplo</span>':''}</div>
     </div>
     <div class="specs">
-      <div><span class="label">OC</span><b class="mono">${esc(o.oc||'—')}</b></div>
+      ${o.fechaOT?`<div><span class="label">Fecha OT</span><b>${new Date(o.fechaOT+'T12:00').toLocaleDateString('es-CL',{day:'numeric',month:'short'})}</b></div>`:''}
       <div><span class="label">Servicio</span><b>${esc(o.tipo)}</b></div>
       <div><span class="label">Medida</span><b class="mono">${esc(o.medida)}</b></div>
       <div><span class="label">Cantidad</span><b>${o.cant} u.</b></div>
@@ -500,9 +541,9 @@ function work(o,s){
   </section>`;
 }
 function notFoundPanel(){
-  const q=ui.notFound;
-  return `<div class="work"><div class="banner warn"><b>La orden “${esc(q)}” no está en la base.</b><span>Revisa que el número esté bien escrito. Si la sierra ya está en el taller, agrégala aquí y queda disponible para todas las estaciones.</span></div>
-    <div class="actions"><button class="btn primary" data-act="addfound">Agregar orden ${esc(q)}</button><button class="btn" data-act="cancelnew">Buscar otro número</button></div></div>`;
+  const q=ui.notFound, err=ui.bbddErr;
+  return `<div class="work"><div class="banner warn"><b>La OT ${esc(q)} ${err?'no está en la app y no pude consultar la base de prueba':bbddOn()?'no está en la base de prueba':'no está en la app'}.</b><span>${err?'Revisa la conexión a internet. Puedes ingresarla igual.':'Revisa el número. Si la sierra ya está en el taller, ingrésala con una foto de la OT o solo con su número.'}</span></div>
+    <div class="actions"><label class="btn primary filebtn">📷 Foto de la OT<input type="file" id="otphoto" accept="image/*" capture="environment"></label><button class="btn" data-act="addfound">Ingresar solo con N° ${esc(q)}</button><button class="btn" data-act="cancelnew">Buscar otro</button></div></div>`;
 }
 function newForm(){
   const tom=new Date(Date.now()+2*day).toISOString().slice(0,10), pf=ui.prefill||{};
@@ -515,20 +556,19 @@ function newForm(){
       <span class="hint">Revisa sobre todo <b>cliente y medida</b>: la letra a mano y las fotos inclinadas se leen con errores. La orden queda en la fila de <b>Recepción</b>.</span></div></div>
     ${pf.items&&pf.items.length?`<label class="full" style="display:flex;flex-direction:column;gap:4px"><span class="label">Detalle leído (${pf.items.length} ${pf.items.length>1?'ítems':'ítem'})</span><textarea id="f-det" rows="${Math.min(4,pf.items.length+1)}">${esc(pf.items.map(x=>`${x.cant} × ${x.desc}`).join('\n'))}</textarea></label>`:''}`:''}
     <div class="form">
-      <label><span class="label">N° OC / Nota de venta</span><input id="f-oc" value="${esc(pf.oc||'')}" placeholder="Ej. 45021" class="mono"></label>
-      <label><span class="label">N° OT (Random)</span><input id="f-ot" value="${esc(pf.ot||'')}" placeholder="Vacío = ${nextId()}" class="mono"></label>
-      <label class="full"><span class="label">Cliente</span><input id="f-cl" required placeholder="Nombre del cliente" value="${esc(pf.cliente||'')}"></label>
+      <label class="full"><span class="label">N° OT · obligatorio</span><input id="f-ot" required value="${esc(pf.ot||'')}" placeholder="Ej. 111859" class="mono" inputmode="numeric" style="font-size:20px"></label>
+      <label class="full"><span class="label">Cliente</span><input id="f-cl" placeholder="Opcional" value="${esc(pf.cliente||'')}">${pf.clienteOrig&&pf.clienteOrig!==pf.cliente?`<span class="hint">Corregido según BBDD (la foto decía “${esc(pf.clienteOrig)}”)</span>`:''}</label>
       <label><span class="label">Servicio</span><select id="f-tipo">${Object.keys(ROUTES).map(k=>`<option ${pf.tipo===k?'selected':''}>${k}</option>`).join('')}</select></label>
-      <label><span class="label">Medida</span><input id="f-med" required placeholder='6,40 m × 5" / Ø 450 mm' value="${esc(pf.medida||'')}"></label>
+      <label><span class="label">Medida</span><input id="f-med" placeholder="Opcional · Ø 300 mm 96 Z" value="${esc(pf.medida||'')}"></label>
       <label><span class="label">Cantidad</span><input id="f-cant" type="number" min="1" value="${pf.cant||1}" required></label>
-      <label><span class="label">Entrega</span><input id="f-due" type="date" value="${tom}" required></label>
+      <label><span class="label">Entrega</span><input id="f-due" type="date" value="${tom}"></label>
       <label><span class="label">Prioridad</span><select id="f-pri"><option value="normal">Normal</option><option value="alta">Urgente</option></select></label>
       ${view!=='rec'&&!toRec?`<label class="chk full"><input type="checkbox" id="f-in" ${op?'checked':'disabled'}><span>Registrar entrada a ${S(view).name} ahora${op?` (${esc(op)})`:' — elige operador arriba'}</span></label>`:''}
     </div>
     <div class="hint" id="f-route"></div>
     ${ph&&pf.text?`<details><summary>Texto leído de la foto</summary><pre class="ocrtxt">${esc(pf.text)}</pre></details>`:''}
-    <div class="hint">Las órdenes agregadas desde el taller quedan marcadas para que la oficina las verifique en Random.</div>
-    <div class="actions"><button class="btn primary" type="submit">Agregar orden</button><button class="btn" type="button" data-act="cancelnew">Cancelar</button></div>
+    <div class="hint">${ph&&bbddOn()?'Al guardar, la OT se escribe en la <b>base de prueba</b> con lo leído en la foto y lo que completes.':'Las órdenes ingresadas desde el taller quedan marcadas para que la oficina las verifique.'}</div>
+    <div class="actions"><button class="btn primary" type="submit">${ph&&bbddOn()?'Guardar (base de prueba)':'Ingresar OT'}</button><button class="btn" type="button" data-act="cancelnew">Cancelar</button></div>
   </form>`;
 }
 function createdPanel(id){
@@ -567,30 +607,33 @@ function renderSup(){
   </div></div>
   <div class="section"><h2>Requiere atención</h2>
     ${attn.length?`<div class="attn">${attn.map(o=>`<div class="attn-row"><span class="mono"><b>${o.id}</b></span>
-      <span>${esc(o.cliente)} · OC ${esc(o.oc||'—')} · en <b>${S(cur(o)).name}</b>${o.estado==='bloqueada'?` · <span class="late">${esc(o.motivo)}</span>`:''}</span>
+      <span>${esc(o.cliente)} · en <b>${S(cur(o)).name}</b>${o.estado==='bloqueada'?` · <span class="late">${esc(o.motivo)}</span>`:''}</span>
       <span style="display:flex;gap:6px;align-items:center">${chip(o)} ${dueTxt(o)}</span></div>`).join('')}</div>`
       :'<div class="empty">No hay OT bloqueadas ni atrasadas.</div>'}
   </div>
   ${(()=>{const mm=all().filter(o=>o.manual);return mm.length?`<div class="section"><h2>Agregadas desde el taller</h2>
     <p class="hint" style="margin:0">No venían de la base. Verifica que existan en Random y márcalas como revisadas.</p>
-    <div class="attn">${mm.map(o=>`<div class="attn-row"><span class="mono"><b>${o.id}</b></span><span>${esc(o.cliente)} · OC ${esc(o.oc||'—')} · ${esc((o.log||[]).slice(-1)[0]?.x||'')}</span><button class="btn sm" data-act="reviewed" data-id="${o.id}">Marcar revisada</button></div>`).join('')}</div></div>`:''})()}
+    <div class="attn">${mm.map(o=>`<div class="attn-row"><span class="mono"><b>${o.id}</b></span><span>${esc(o.cliente)} · ${esc((o.log||[]).slice(-1)[0]?.x||'')}</span><button class="btn sm" data-act="reviewed" data-id="${o.id}">Marcar revisada</button></div>`).join('')}</div></div>`:''})()}
   <div class="section"><h2>Tiempos por estación</h2>
     <div style="overflow-x:auto"><table><thead><tr><th>Estación</th><th class="num">En cola</th><th class="num">OT terminadas</th><th class="num">Tiempo prom.</th></tr></thead>
     <tbody>${avg.map(x=>`<tr><td>${x.s.name}${x===bott&&x.q>1?' <span class="pri alta">Cuello de botella</span>':''}</td><td class="num">${x.q}</td><td class="num">${x.n}</td><td class="num">${x.n?fmtMin(x.m):'–'}</td></tr>`).join('')}</tbody></table></div>
     <div class="hint">Los tiempos salen de la diferencia entre el escaneo de entrada y el de salida en cada estación.</div>
+  </div>
+  <div class="section"><h2>Conexión base de prueba (Drive)</h2>
+    <div class="import">
+      <span>${bbddOn()?'<b style="color:var(--ok)">● Configurada.</b> Al escribir un N° de OT que no está en la app, se busca en la base de prueba. Las OT ingresadas con foto se escriben en la base de prueba.':'<b style="color:var(--warn)">● Sin configurar.</b> La app funciona sola, sin consultar la BBDD.'}</span>
+      <div class="form"><label class="full"><span class="label">URL del script (/exec)</span><input id="cfg-url" value="${esc(local.bbddUrl||BBDD_URL_DEF)}" placeholder="https://script.google.com/macros/s/…/exec"></label>
+      <label><span class="label">Clave</span><input id="cfg-key" value="${esc(local.bbddKey||BBDD_KEY_DEF)}"></label></div>
+      <div class="actions"><button class="btn sm primary" data-act="cfgsave">Guardar y probar</button>
+      ${all().some(o=>o.bbddPend)?`<button class="btn sm" data-act="retrybbdd">Reintentar envíos pendientes (${all().filter(o=>o.bbddPend).length})</button>`:''}</div>
+    </div>
   </div>
   <div class="section"><h2>QR de estaciones</h2>
     <p class="hint" style="margin:0">Imprime y pega cada QR en su estación. Al escanearlo con la cámara del celular se abre esta página directamente en esa estación. Los QR apuntan a la dirección donde está publicada esta página.</p>
     <div class="qrgrid">${STATIONS.map(s=>`<div class="qrcard"><img data-qr="${s.id}" alt="QR de ${s.name}"><b>${s.name}</b><button class="btn sm" data-act="dlqr" data-id="${s.id}">Descargar</button></div>`).join('')}</div>
     <div><button class="btn sm primary" data-act="dlsheet">Descargar hoja con todos (A4)</button></div>
   </div>
-  <div class="section"><h2>Cargar órdenes desde el ERP</h2>
-    <div class="import">
-      <span>Maqueta: cada equipo guarda sus propios datos; los cambios no se comparten entre celulares. Exporta las OT abiertas desde Random a CSV y súbelas aquí. Las OT que ya existen se actualizan con los datos del archivo sin perder su avance en el taller.</span>
-      <span class="hint">Columnas: <code>OT;OC;Cliente;Servicio;Medida;Cantidad;Entrega;Prioridad</code> · Servicio = Sierra huincha, Sierra circular o Afilado simple · Entrega en formato dd-mm-aaaa.</span>
-      <label class="btn sm filebtn" style="align-self:flex-start">Subir CSV<input type="file" id="csv" accept=".csv,text/csv"></label>
-    </div>
-  </div>`;
+`;
 }
 
 function render(){renderTabs(); view==='sup'?renderSup():renderStation(); updRoute(); fillQR()}
@@ -659,6 +702,21 @@ function importCSV(text){
   toast(`${n} OT cargadas${skip?` · ${skip} filas omitidas`:''}`); render();
 }
 
+function itemsDe(o){
+  const lines=String(o.detalle||'').split('\n').map(l=>l.trim()).filter(Boolean);
+  const its=lines.map(l=>{const m=l.match(/^(\d{1,3})\s*[×x*]\s*(.+)$/);const d=(m?m[2]:l).trim();return {cant:m?+m[1]:1,detalle:d.toUpperCase(),codigo:codigoDe(d)}});
+  return its.length?its:[{cant:o.cant||1,detalle:o.medida&&o.medida!=='—'?o.medida:'',codigo:''}];
+}
+async function enviarBBDD(o){
+  o.bbddPend=true;persist(o);
+  try{
+    const r=await bbddPost({action:'crear',ot:o.id.replace(/^OT-/,''),fecha:o.fechaOT||new Date().toISOString().slice(0,10),cliente:o.cliente==='Sin cliente'?'':o.cliente,items:itemsDe(o)});
+    o.bbddPend=false;if(r.cliente&&r.cliente!==o.cliente)o.cliente=r.cliente;
+    log(o,r.duplicada?'Ya existía en base de prueba':`Guardada en base de prueba (fila ${r.fila})`);persist(o);render();
+    toast(r.duplicada?`${o.id} ya estaba en la BBDD`:`${o.id} guardada en base de prueba`);
+  }catch(e){o.bbddPend=true;log(o,'No se pudo guardar en base de prueba');persist(o);render();toast('No se pudo guardar en la base de prueba: queda pendiente (Supervisor → Reintentar)',true)}
+}
+
 /* ---------- OCR foto de OT ---------- */
 let tessP=null;
 function loadTess(){
@@ -723,7 +781,12 @@ async function readOTPhoto(file){
     const r=await Tesseract.recognize(img.canvas,'spa',{logger:m=>{if(m.status==='recognizing text'&&ui.ocr){ui.ocr.pct=Math.round(m.progress*100);ui.ocr.msg='Leyendo la OT…';const b=$('#ocrbar');if(b)b.style.width=ui.ocr.pct+'%';const t=$('#ocrmsg');if(t)t.textContent=`Leyendo la OT… ${ui.ocr.pct}%`}}});
     const text=r.data.text||'', d=parseOT(text);
     const ex=d.ot&&(orders.get('OT-'+d.ot)||orders.get(d.ot));
-    if(ex){ui={sel:ex.id,ocr:null,scanMsg:{k:'in',t:`${ex.id} ya está en la base`,s:'La abrí para que la trabajes.'}};return render()}
+    if(ex){ui={sel:ex.id,ocr:null,scanMsg:{k:'in',t:`${ex.id} ya está en la app`,s:'La abrí para que la trabajes.'}};return render()}
+    if(d.ot&&bbddOn()){ui.ocr.msg=`Leí la OT ${d.ot}. Buscando en base de prueba…`;ui.ocr.pct=100;render();
+      try{const b=await bbddGet({action:'ot',ot:d.ot});
+        if(b.found){const o=orderFromBBDD(b,'rec');o.photo=true;persist(o);ui={sel:o.id,ocr:null,scanMsg:{k:'in',t:`OT ${d.ot} encontrada en base de prueba`,s:'Usé los datos de la base. Quedó en la fila de Recepción.'}};return render()}
+        if(d.cliente){try{const c=await bbddGet({action:'cliente',q:d.cliente});if(c.match){d.clienteOrig=d.cliente;d.cliente=c.match.nombre}}catch(x){}}
+      }catch(x){toast('No pude consultar la BBDD: revisa los datos a mano',true)}}
     ui={sel:null,ocr:null,newForm:true,prefill:{...d,text,photo:img.thumb,forceRec:true}};render();
     toast(d.ot?`Leí la OT ${d.ot}: revisa cliente y medida`:'No encontré el N° de OT: elígelo o escríbelo');
   }catch(e){ui={sel:null,newForm:true,prefill:{photo:img.thumb,forceRec:true,cands:[]}};render();toast('No pude leer la foto: completa los datos a mano',true)}
@@ -735,17 +798,21 @@ function ocrPanel(){const o=ui.ocr;return `<div class="work"><div class="ocr-pre
 /* ---------- events ---------- */
 document.addEventListener('click',e=>{
   const t=e.target.closest('button'); if(!t) return;
+  if(t.closest('form')&&!t.dataset.act&&!t.dataset.cand) return;
   if(t.dataset.tab) return go(t.dataset.tab);
   if(t.dataset.cand){const f=$('#f-ot');if(f)f.value=t.dataset.cand;document.querySelectorAll('.cand').forEach(b=>b.classList.toggle('on',b===t));if(ui.prefill)ui.prefill.ot=t.dataset.cand;return}
   if(t.dataset.go){go(t.dataset.go);ui.sel=t.dataset.sel;return render()}
   if(t.dataset.pick){const o=orders.get(t.dataset.pick);if(o)openOrder(o,true);return}
   if(t.dataset.sel){ui={sel:t.dataset.sel,blocking:false,newForm:false,created:null,picks:null,scanMsg:null};render();if(matchMedia('(max-width:820px)').matches)scrollTo({top:$('.work')?.offsetTop-70||0,behavior:'smooth'});return}
   if(t.id==='newot'){ui={sel:null,newForm:true,prefill:{}};return render()}
-  if(t.dataset.act==='addfound'){const q=norm(ui.notFound);const isOT=/^OT-?\d+$/.test(q);ui={sel:null,newForm:true,prefill:isOT?{ot:q.replace(/^OT(\d)/,'OT-$1')}:{oc:ui.notFound}};return render()}
+  if(t.dataset.act==='addfound'){ui={sel:null,newForm:true,prefill:{ot:ui.notFound}};return render()}
   const a=t.dataset.act;
   if(a==='clearres'){ui.result=null;render();setTimeout(()=>$('#scan')?.focus(),0);return}
   if(a==='cancelnew'){ui.newForm=false;ui.notFound=null;ui.prefill=null;return render()}
   if(a==='dlqr') return downloadStation(t.dataset.id);
+  if(a==='cfgsave'){local.bbddUrl=$('#cfg-url').value.trim();local.bbddKey=$('#cfg-key').value.trim();saveLocal();render();
+    if(!bbddOn())return toast('Conexión borrada');bbddGet({action:'ping'}).then(()=>toast('Conectado a la base de prueba')).catch(e=>toast(e.message==='clave'?'La clave no coincide con la del script':'No pude conectar: revisa la URL',true));return}
+  if(a==='retrybbdd'){all().filter(o=>o.bbddPend).forEach(o=>enviarBBDD(o));return}
   if(a==='reviewed'){const r=orders.get(t.dataset.id);if(r){r.manual=false;log(r,'Verificada en Random');persist(r);toast(`${r.id} revisada`);render()}return}
   if(a==='dlsheet') return downloadSheet();
   if(a==='clearex'){
@@ -780,18 +847,23 @@ document.addEventListener('submit',e=>{
   if(e.target.id==='scanform'){const v=$('#scan').value;if(v.trim())handleScan(v);return}
   if(e.target.id==='noteform'){const v=$('#note').value.trim();const o=ui.sel&&orders.get(ui.sel);if(v&&o){log(o,v);persist(o);render()}return}
   if(e.target.id==='otform'){
-    const tipo=$('#f-tipo').value, ru=ROUTES[tipo];
-    let id=norm($('#f-ot').value); if(id){id=/^\d+$/.test(id)?'OT-'+id:id.replace(/^OT(\d)/,'OT-$1')} else id=nextId();
-    if(!/^[A-Z0-9_.~:@+-]+$/.test(id)) return toast('El N° de OT solo puede tener letras, números y guiones',true);
-    if(orders.has(id)) return toast(`${id} ya existe en la base`,true);
-    const toRec=!!(ui.prefill&&ui.prefill.forceRec);
+    const tipo=$('#f-tipo').value, ru=ROUTES[tipo], pf=ui.prefill||{};
+    const num=norm($('#f-ot').value).replace(/^OT-?/,'').replace(/^0+/,'');
+    if(!/^\d{3,10}$/.test(num)) return toast('Escribe el N° de OT (solo números)',true);
+    const id='OT-'+num;
+    if(orders.has(id)) return toast(`${id} ya está en la app`,true);
+    const toRec=!!pf.forceRec;
     const paso=toRec?0:Math.max(0,ru.indexOf(view));
-    const o={id,oc:$('#f-oc').value.trim(),cliente:$('#f-cl').value.trim(),tipo,medida:$('#f-med').value.trim(),cant:+$('#f-cant').value,prio:$('#f-pri').value,
-      due:new Date($('#f-due').value+'T18:00').getTime(),ruta:ru,paso,estado:'cola',acc:0,t0:null,op:null,checks:{},tiempos:{},motivo:null,
-      photo:toRec||undefined,detalle:($('#f-det')?.value||'').trim()||undefined,fechaOT:ui.prefill?.fecha||undefined,vendedor:ui.prefill?.vendedor||undefined,manual:view!=='rec'||toRec,log:[{t:Date.now(),x:toRec?`Creada desde foto de OT (${S(view).name})`+(local.op?.[view]?` · ${local.op[view]}`:''):view==='rec'?'OT creada en Recepción':`Agregada desde ${S(view).name} (no estaba en la base)`+(local.op?.[view]?` · ${local.op[view]}`:'')}]};
+    const det=($('#f-det')?.value||'').trim();
+    const dueV=$('#f-due').value;
+    const o={id,cliente:$('#f-cl').value.trim()||'Sin cliente',tipo,medida:$('#f-med').value.trim()||'—',cant:+$('#f-cant').value||1,prio:$('#f-pri').value,
+      due:dueV?new Date(dueV+'T18:00').getTime():Date.now()+2*day,ruta:ru,paso,estado:'cola',acc:0,t0:null,op:null,checks:{},tiempos:{},motivo:null,
+      photo:toRec||undefined,detalle:det||undefined,fechaOT:fechaISO(pf.fecha)||undefined,manual:true,
+      log:[{t:Date.now(),x:(toRec?`Ingresada desde foto (${S(view).name})`:`Ingresada solo con N° en ${S(view).name}`)+(local.op?.[view]?` · ${local.op[view]}`:'')}]};
     const fi=$('#f-in');
     if(fi&&fi.checked&&ru[paso]===view){orders.set(o.id,o);entrada(o)} else persist(o);
-    ui={sel:null,newForm:false,created:id}; render(); toast(`${id} agregada`);
+    ui={sel:null,newForm:false,created:id}; render(); toast(`${id} ingresada`);
+    if(toRec&&bbddOn()) enviarBBDD(o);
   }
 });
 
