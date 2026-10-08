@@ -271,6 +271,11 @@ summary{cursor:pointer;font-weight:600;font-size:14px;text-transform:uppercase;l
 .estrow label{display:flex;flex-direction:column;gap:2px}
 .estrow select{min-height:36px;padding:4px 8px}
 @media (max-width:560px){.estrow{grid-template-columns:1fr 1fr}.estrow>div{grid-column:1/-1}}
+.qrtop{margin:6px 0 22px}
+.qrgrid.big{grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px}
+.qrgrid.big .qrcard img{max-width:220px}
+.qrgrid.big .qrcard b{font-family:var(--display);font-size:22px;text-transform:uppercase;letter-spacing:.03em}
+.qrcard.off{border-color:var(--bad);background:var(--bad-bg)}
 #qrtmp{position:absolute;left:-9999px;top:0}
 </style>
 </head><body>
@@ -759,6 +764,11 @@ function renderSup(){
     <button class="btn sm" data-act="resetdemo">${ui.confirmReset?'Confirmar: reiniciar maqueta':'Reiniciar maqueta'}</button>
     ${ex?`<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span class="hint">${ex} OT de ejemplo cargadas</span><button class="btn sm" data-act="clearex">${ui.confirmClear?'Confirmar: borrar ejemplos':'Borrar ejemplos'}</button></div>`:''}</div>
   ${dbState==='off'?'<div class="banner warn" style="margin-bottom:16px"><b>Sin conexión a la base de datos.</b><span>Recarga la página.</span></div>':''}
+  <div class="section qrtop"><h2>QR de estaciones · escanea con el celular</h2>
+    <p class="hint" style="margin:0">Cada QR abre la app en esa estación y habilita <b>Iniciar</b> / <b>Registrar llegada</b> por 15 minutos.</p>
+    <div class="qrgrid big">${STATIONS.map(s=>`<div class="qrcard${fuera(s.id)?' off':''}"><img data-qr="${s.id}" alt="QR de ${s.name}"><b>${s.name}</b>${fuera(s.id)?'<span class="late">⛔ Fuera de servicio</span>':''}<button class="btn sm" data-act="dlqr" data-id="${s.id}">Descargar</button></div>`).join('')}</div>
+    <div><button class="btn sm" data-act="dlsheet">Descargar hoja con todos (A4)</button></div>
+  </div>
   <div class="kpis">
     <div class="kpi"><span class="label">OT en taller</span><b>${new Set(a.map(otOf)).size}</b></div>
     <div class="kpi"><span class="label">En proceso</span><b>${a.filter(o=>o.estado==='proceso').length}</b></div>
@@ -801,11 +811,7 @@ function renderSup(){
       ${all().some(o=>o.bbddPend||(o.regPend||[]).length)?`<button class="btn sm" data-act="retrybbdd">Reintentar envíos pendientes (${all().filter(o=>o.bbddPend).length})</button>`:''}</div>
     </div>
   </div>
-  <div class="section"><h2>QR de estaciones</h2>
-    <p class="hint" style="margin:0">Imprime y pega cada QR en su estación. Al escanearlo con la cámara del celular se abre esta página directamente en esa estación. Los QR apuntan a la dirección donde está publicada esta página.</p>
-    <div class="qrgrid">${STATIONS.map(s=>`<div class="qrcard"><img data-qr="${s.id}" alt="QR de ${s.name}"><b>${s.name}</b><button class="btn sm" data-act="dlqr" data-id="${s.id}">Descargar</button></div>`).join('')}</div>
-    <div><button class="btn sm primary" data-act="dlsheet">Descargar hoja con todos (A4)</button></div>
-  </div>
+
 `;
 }
 
@@ -824,7 +830,7 @@ function qrCanvas(text,size){
   return qrCache[key]=out;
 }
 const stUrl=id=>APP_URL+'?e='+QR_KEYS[id]+'#'+id;
-function fillQR(){document.querySelectorAll('img[data-qr]').forEach(i=>{const c=qrCanvas(stUrl(i.dataset.qr),220);if(c&&!i.src)i.src=c.toDataURL('image/png')})}
+function fillQR(){document.querySelectorAll('img[data-qr]').forEach(i=>{const c=qrCanvas(stUrl(i.dataset.qr),300);if(c&&!i.src)i.src=c.toDataURL('image/png')})}
 function poster(g,s,x,y,w,h){
   g.fillStyle='#fff';g.fillRect(x,y,w,h);g.strokeStyle='#1b2326';g.lineWidth=Math.max(3,w/200);g.strokeRect(x+g.lineWidth/2,y+g.lineWidth/2,w-g.lineWidth,h-g.lineWidth);
   g.fillStyle='#f0b400';g.fillRect(x,y,w,h*0.16);
