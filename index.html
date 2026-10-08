@@ -241,6 +241,36 @@ summary{cursor:pointer;font-weight:600;font-size:14px;text-transform:uppercase;l
 .cand.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 .form textarea,#otform textarea{width:100%;font-family:var(--mono);font-size:13px;resize:vertical}
 .ocrtxt{white-space:pre-wrap;font-family:var(--mono);font-size:12px;max-height:200px;overflow:auto;background:var(--bg);padding:10px;border-radius:6px;margin:8px 0 0}
+.chooser{display:flex;flex-direction:column;gap:10px;background:var(--bg);border-radius:10px;padding:14px}
+.chooser b{font-size:17px}
+.nextgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.nextgrid .btn{min-height:56px}
+.nextgrid .btn.go{grid-column:1/-1}
+.scanlock{display:flex;gap:14px;align-items:center;border:2px dashed var(--muted);border-radius:12px;padding:16px;background:var(--bg)}
+.scanlock .big{font-size:34px;line-height:1;color:var(--muted)}
+.scanlock div{display:flex;flex-direction:column;gap:2px}
+.scanlock span{font-size:13px;color:var(--muted)}
+.scanstate{font-size:12px;font-weight:600;color:var(--muted);margin-top:4px}
+.scanstate.on{color:var(--ok)}
+.pz{font-family:var(--body);font-size:12px;font-weight:600;background:var(--accent);color:var(--accent-ink);padding:1px 7px;border-radius:9px;margin-left:4px}
+.mini .pz{margin:2px 0 0;align-self:flex-start}
+.pzbig{display:inline-block;font-weight:700;background:var(--accent);color:var(--accent-ink);padding:2px 10px;border-radius:10px;margin:4px 0}
+.comps{display:flex;flex-direction:column;gap:6px}
+.comp{display:flex;justify-content:space-between;gap:10px;border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:10px 12px;text-align:left}
+.comp.me{border-color:var(--ink)}
+.comp span{color:var(--muted);font-size:13px}
+.banner.bad{background:var(--bad-bg);border:2px solid var(--bad)}
+.estbtn{margin-top:6px;font-size:12px;color:var(--muted)}
+.btn.alt{border-style:dashed}
+.btn.alt small{display:block;font-weight:500;font-size:12px}
+.estgrid{display:flex;flex-direction:column;gap:8px}
+.estrow{display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 14px}
+.estrow.off{border-color:var(--bad);background:var(--bad-bg)}
+.estrow div{display:flex;flex-direction:column}
+.estrow span{font-size:13px;color:var(--muted)}
+.estrow label{display:flex;flex-direction:column;gap:2px}
+.estrow select{min-height:36px;padding:4px 8px}
+@media (max-width:560px){.estrow{grid-template-columns:1fr 1fr}.estrow>div{grid-column:1/-1}}
 #qrtmp{position:absolute;left:-9999px;top:0}
 </style>
 </head><body>
@@ -257,25 +287,24 @@ summary{cursor:pointer;font-weight:600;font-size:14px;text-transform:uppercase;l
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script>
 const STATIONS = [
-  {id:'rec', name:'Recepción', checks:['Pieza marcada con N° de OT','Medidas registradas (largo / Ø)','Estado de llegada revisado']},
-  {id:'lim', name:'Limpieza', checks:['Resina y suciedad retiradas','Pieza seca','Revisión visual de grietas']},
-  {id:'sol', name:'Soldadura', checks:['Extremos cortados a escuadra','Soldadura hecha','Recocido del cordón','Cordón rectificado']},
-  {id:'ins', name:'Insertos', checks:['Insertos dañados retirados','Insertos nuevos soldados',{t:'Insertos cambiados',num:true}]},
-  {id:'ten', name:'Tensionado', checks:['Planitud verificada','Tensionado / laminado','Control con regla']},
-  {id:'afi', name:'Afilado', checks:['Ángulo según ficha','Dientes afilados','Trabado / recalcado revisado']},
-  {id:'qc',  name:'Control', checks:['Medición final','Inspección visual OK','Etiqueta de aprobado']},
-  {id:'des', name:'Despacho', checks:['Embalado','Guía de despacho emitida','Cliente avisado']},
+  {id:'rec', name:'Recepción',   avance:'ACTUALIZAR',  checks:['OT y piezas coinciden','Estado de llegada revisado']},
+  {id:'dia', name:'Diagnóstico', avance:'Diagnostico', checks:['Pieza evaluada','Servicio confirmado (afilado / cambio de placas)']},
+  {id:'sth', name:'Sthele',      avance:'Sthele',      checks:['Programa / ángulo según ficha','Afilado terminado']},
+  {id:'sol', name:'Soldadura',   avance:'Soldadura',   checks:['Placas retiradas','Placas nuevas soldadas',{t:'Placas cambiadas',num:true}]},
+  {id:'wal', name:'Walter',      avance:'Walter',      checks:['Programa cargado','Afilado terminado']},
+  {id:'ter', name:'Terminación', avance:'Terminacion', checks:['Medición final','Inspección visual OK','Embalado']},
 ];
-const ROUTES = {
-  'Sierra huincha':  ['rec','lim','sol','ten','afi','qc','des'],
-  'Sierra circular': ['rec','lim','ins','ten','afi','qc','des'],
-  'Afilado simple':  ['rec','lim','afi','qc','des'],
-};
+const RUTA = STATIONS.map(s=>s.id);
+const ROUTES = {'Afilado':RUTA,'Cambio parcial':RUTA,'Cambio total':RUTA,'Customizado':RUTA};
+const servicioDe = cod=>/\bCT\b/.test(cod||'')?'Cambio total':/\bCP\b/.test(cod||'')?'Cambio parcial':/CABEZAL|ART/.test(cod||'')?'Customizado':'Afilado';
 const OPERATORS = ['Juan Soto','Pedro Muñoz','Luis Rojas','Marcos Vera','Carla Díaz'];
-const BLOCK_REASONS = ['Falta material / insertos','Máquina detenida','Espera aprobación cliente','Pieza con grieta','Otro'];
+const BLOCK_REASONS = ['No reparable','Falta material / placas','Máquina detenida','Espera aprobación cliente','Otro'];
 const S = id => STATIONS.find(s=>s.id===id);
 const COL = 'ordenes';
-const APP_URL = location.href.split('#')[0];
+const APP_URL = location.origin + location.pathname;
+/* Código propio de cada QR de estación: solo escaneando el QR se habilita INICIAR */
+const QR_KEYS = {"rec": "0e745c", "dia": "a4dd27", "sth": "c19efe", "sol": "703ded", "wal": "ef12de", "ter": "2f6b0d"};
+const SCAN_MIN = 15;   // minutos que dura la habilitación después de escanear
 /* Conexión a BBDD Servicios 2026 (Google Apps Script). Pega aquí la URL /exec y la clave del script. */
 const BBDD_URL_DEF = 'https://script.google.com/macros/s/AKfycbxSx5cUKInVwh8LUEDjElN-gipJtHuPr16a-6qnXx_Zraw5BV9tlKQw2_eIQtY3FjQo4g/exec';
 const BBDD_KEY_DEF = 'ing-54b27fd4a4d9';
@@ -287,8 +316,14 @@ let db = null, dbState = 'connecting';
 let view = 'sup';
 let ui = {sel:null, blocking:false, newForm:false, created:null, picks:null, scanMsg:null};
 const local = (()=>{try{return JSON.parse(localStorage.getItem('ingemad-tablet')||'{}')}catch(e){return {}}})();
+if(!local.operario&&local.op){const v=Object.values(local.op).filter(Boolean);if(v.length)local.operario=v[0]}
 function saveLocal(){try{localStorage.setItem('ingemad-tablet',JSON.stringify(local))}catch(e){}}
-try{const h=location.hash.slice(1); if(h==='sup'||S(h)){view=h; if(S(h)) ui.scanMsg={k:'in',t:`Estás en ${S(h).name}`,s:'Escribe el N° de OT para registrar una entrada, o toca un trabajo en curso para registrar la salida.'}} else if(local.view) view=local.view}catch(e){}
+try{const q=new URLSearchParams(location.search).get('e'), h0=location.hash.slice(1);
+  if(q&&QR_KEYS[h0]===q){local.scan={st:h0,t:Date.now()};saveLocal()}
+  if(location.search) history.replaceState(null,'',location.pathname+location.hash);
+}catch(e){}
+const scanOK=st=>!!(local.scan&&local.scan.st===st&&Date.now()-local.scan.t<SCAN_MIN*6e4);
+try{const h=location.hash.slice(1); if(h==='sup'||S(h)){view=h; if(S(h)) ui.scanMsg={k:'in',t:scanOK(h)?`QR de ${S(h).name} escaneado · puedes iniciar`:`Estás en ${S(h).name}`,s:'Escribe el N° de OT para registrar una entrada, o toca un trabajo en curso para registrar la salida.'}} else if(local.view) view=local.view}catch(e){}
 
 const $ = s=>document.querySelector(s);
 const esc = s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -297,14 +332,27 @@ const elapsed = o=>(o.acc||0)+(o.estado==='proceso'&&o.t0?Date.now()-o.t0:0);
 const fmt = ms=>{const s=Math.floor(ms/1000),h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=s%60;return (h?h+':':'')+String(m).padStart(h?2:1,'0')+':'+String(x).padStart(2,'0')};
 const fmtMin = ms=>Math.round(ms/6e4)+' min';
 const hhmm = t=>new Date(t).toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'});
-const isLate = o=>o.estado!=='despachada' && o.due < Date.now();
+const isLate = o=>false;   // fecha de entrega desactivada por ahora
 const all = ()=>[...orders.values()];
+/* Componentes: cada pieza es una unidad de trabajo; la OT agrupa sus piezas */
+const ENTERA='Herramienta completa';
+const otOf=o=>o.ot||o.id, otNum=o=>otOf(o).replace(/^OT-/,''), piezaOf=o=>o.pieza||ENTERA;
+const nm=o=>otOf(o)+(o.pieza?' · '+o.pieza:'');
+const piecesOf=ot=>all().filter(o=>otOf(o)===ot);
+const PLANTILLAS={Sierra:['Cuerpo / disco','Placas'],Incisor:['Cuerpo','Placas'],Fresa:['Cuerpo','Placas'],Cabezal:['Cuerpo','Cuchillos','Tornillería'],Cuchillo:['Cuchillos'],Herramienta:['Cuerpo','Piezas']};
+function tipoHerr(o){const D=((o.detalle||'')+' '+(o.codigo||'')+' '+(o.medida||'')).toUpperCase();
+  return /CABEZAL/.test(D)?'Cabezal':/CUCHILL|I1AFC/.test(D)?'Cuchillo':/FRESA|I1AFF|I1FAB/.test(D)?'Fresa':/INCISOR|I1AFS I\b/.test(D)?'Incisor':/SIERRA|I1AFS/.test(D)?'Sierra':'Herramienta'}
+/* Estaciones fuera de servicio y su alternativa */
+const EQUIV={sth:'wal',wal:'sth'};
+let EST={}; try{EST=JSON.parse(localStorage.getItem('ingemad-est')||'{}')}catch(e){}
+const fuera=id=>!!EST[id]?.fuera, altDe=id=>EST[id]?.alt||EQUIV[id]||'';
 const active = ()=>all().filter(o=>o.estado!=='despachada');
 const atStation = id=>active().filter(o=>cur(o)===id).sort((a,b)=>(b.estado==='proceso')-(a.estado==='proceso')||(b.prio==='alta')-(a.prio==='alta')||a.due-b.due);
 const comingTo = id=>active().filter(o=>o.ruta[o.paso+1]===id && o.estado==='proceso');
-const stateLbl={cola:'En cola',proceso:'En proceso',pausa:'En pausa',bloqueada:'Bloqueada',despachada:'Despachada'};
+const stateLbl={cola:'En cola',proceso:'En proceso',pausa:'En pausa',bloqueada:'Bloqueada',despachada:'Terminada'};
 const chip = o=>`<span class="chip s-${o.estado}">${stateLbl[o.estado]}</span>`;
-function dueTxt(o){const diff=Math.round((new Date(o.due).setHours(0,0,0,0)-new Date().setHours(0,0,0,0))/day);
+function dueTxt(o){return '';
+  const diff=Math.round((new Date(o.due).setHours(0,0,0,0)-new Date().setHours(0,0,0,0))/day);
   if(o.estado==='despachada') return '<span class="due">Despachada</span>';
   if(diff<0) return `<span class="late">Atrasada ${-diff} d</span>`;
   if(diff===0) return `<span class="${isLate(o)?'late':'due'}">Entrega hoy</span>`;
@@ -313,10 +361,10 @@ function toast(t,bad){const el=$('#toast');el.textContent=t;el.className='toast'
 function log(o,x){o.log=[{t:Date.now(),x:x+(o.op?` · ${o.op}`:''),st:view},...(o.log||[])].slice(0,60)}
 
 /* ---------- db ---------- */
-const STORE='ingemad-demo-ordenes';
-const SEED_NOW=1791208961127, SEED=[{"id": "OT-2479", "oc": "7760", "cliente": "Maderas del Sur", "tipo": "Sierra circular", "medida": "Ø 500 mm · 48 Z", "cant": 2, "prio": "normal", "due": 1791234000000, "ruta": ["rec", "lim", "ins", "ten", "afi", "qc", "des"], "paso": 6, "estado": "despachada", "acc": 0, "t0": null, "op": null, "checks": {}, "tiempos": {"rec": 420000, "lim": 1140000, "ins": 3840000, "ten": 2400000, "afi": 3480000, "qc": 840000, "des": 600000}, "motivo": null, "ejemplo": true, "log": [{"t": 1791198161127, "x": "OT creada en Recepción (ejemplo)"}], "doneAt": 1791201761127}, {"id": "OT-2481", "oc": "45021", "cliente": "Aserradero Los Robles", "tipo": "Sierra huincha", "medida": "6,40 m × 5\"", "cant": 4, "prio": "alta", "due": 1791234000000, "ruta": ["rec", "lim", "sol", "ten", "afi", "qc", "des"], "paso": 3, "estado": "proceso", "acc": 720000, "t0": 1791207581127, "op": "Luis Rojas", "checks": {}, "tiempos": {"rec": 480000, "lim": 1320000, "sol": 2460000}, "motivo": null, "ejemplo": true, "log": [{"t": 1791198161127, "x": "OT creada en Recepción (ejemplo)"}]}, {"id": "OT-2482", "oc": "7781", "cliente": "Maderas del Sur", "tipo": "Sierra circular", "medida": "Ø 450 mm · 40 Z", "cant": 6, "prio": "normal", "due": 1791320400000, "ruta": ["rec", "lim", "ins", "ten", "afi", "qc", "des"], "paso": 2, "estado": "cola", "acc": 0, "t0": null, "op": null, "checks": {}, "tiempos": {"rec": 360000, "lim": 1080000}, "motivo": null, "ejemplo": true, "log": [{"t": 1791198161127, "x": "OT creada en Recepción (ejemplo)"}]}, {"id": "OT-2483", "oc": "3305", "cliente": "Forestal Ñuble", "tipo": "Sierra huincha", "medida": "4,20 m × 3\"", "cant": 10, "prio": "normal", "due": 1791406800000, "ruta": ["rec", "lim", "sol", "ten", "afi", "qc", "des"], "paso": 1, "estado": "proceso", "acc": 0, "t0": 1791208421127, "op": "Pedro Muñoz", "checks": {}, "tiempos": {"rec": 660000}, "motivo": null, "ejemplo": true, "log": [{"t": 1791198161127, "x": "OT creada en Recepción (ejemplo)"}]}, {"id": "OT-2484", "oc": "B-118", "cliente": "Barracas Talca", "tipo": "Afilado simple", "medida": "Ø 300 mm · 60 Z", "cant": 12, "prio": "normal", "due": 1791147600000, "ruta": ["rec", "lim", "afi", "qc", "des"], "paso": 2, "estado": "cola", "acc": 0, "t0": null, "op": null, "checks": {}, "tiempos": {"rec": 300000, "lim": 1500000}, "motivo": null, "ejemplo": true, "log": [{"t": 1791198161127, "x": "OT creada en Recepción (ejemplo)"}]}, {"id": "OT-2485", "oc": "45021", "cliente": "Aserradero Los Robles", "tipo": "Sierra huincha", "medida": "6,40 m × 5\"", "cant": 2, "prio": "alta", "due": 1791234000000, "ruta": ["rec", "lim", "sol", "ten", "afi", "qc", "des"], "paso": 4, "estado": "bloqueada", "acc": 1860000, "t0": null, "op": null, "checks": {}, "tiempos": {"rec": 420000, "lim": 900000, "sol": 2280000, "ten": 3120000}, "motivo": "Máquina detenida", "ejemplo": true, "log": [{"t": 1791198161127, "x": "OT creada en Recepción (ejemplo)"}]}, {"id": "OT-2486", "oc": "990", "cliente": "Muebles Araucanía", "tipo": "Sierra circular", "medida": "Ø 350 mm · 54 Z", "cant": 3, "prio": "normal", "due": 1791493200000, "ruta": ["rec", "lim", "ins", "ten", "afi", "qc", "des"], "paso": 0, "estado": "cola", "acc": 0, "t0": null, "op": null, "checks": {}, "tiempos": {}, "motivo": null, "ejemplo": true, "log": [{"t": 1791198161127, "x": "OT creada en Recepción (ejemplo)"}]}, {"id": "OT-2487", "oc": "3305", "cliente": "Forestal Ñuble", "tipo": "Sierra huincha", "medida": "4,20 m × 3\"", "cant": 8, "prio": "normal", "due": 1791406800000, "ruta": ["rec", "lim", "sol", "ten", "afi", "qc", "des"], "paso": 5, "estado": "pausa", "acc": 1080000, "t0": null, "op": "Juan Soto", "checks": {}, "tiempos": {"rec": 540000, "lim": 1200000, "sol": 2100000, "ten": 2820000, "afi": 3300000}, "motivo": null, "ejemplo": true, "log": [{"t": 1791198161127, "x": "OT creada en Recepción (ejemplo)"}]}, {"id": "OT-2488", "oc": "PO-5512", "cliente": "Constructora Biobío", "tipo": "Sierra circular", "medida": "Ø 250 mm · 24 Z", "cant": 5, "prio": "normal", "due": 1791579600000, "ruta": ["rec", "lim", "ins", "ten", "afi", "qc", "des"], "paso": 0, "estado": "cola", "acc": 0, "t0": null, "op": null, "checks": {}, "tiempos": {}, "motivo": null, "ejemplo": true, "log": [{"t": 1791198161127, "x": "OT creada en Recepción (ejemplo)"}]}, {"id": "OT-2489", "oc": "B-120", "cliente": "Barracas Talca", "tipo": "Afilado simple", "medida": "Ø 400 mm · 72 Z", "cant": 4, "prio": "normal", "due": 1791234000000, "ruta": ["rec", "lim", "afi", "qc", "des"], "paso": 4, "estado": "cola", "acc": 0, "t0": null, "op": null, "checks": {}, "tiempos": {"rec": 240000, "lim": 960000, "afi": 2880000, "qc": 720000}, "motivo": null, "ejemplo": true, "log": [{"t": 1791198161127, "x": "OT creada en Recepción (ejemplo)"}]}];
+const STORE='ingemad-ordenes-v2';
+const SEED_NOW=0, SEED=[];
 function saveOrders(){try{localStorage.setItem(STORE,JSON.stringify([...orders.values()]))}catch(e){toast('No se pudo guardar en este equipo',true)}}
-function persist(o){orders.set(o.id,o);saveOrders()}
+function persist(o){o.upd=Date.now();orders.set(o.id,o);saveOrders()}
 function loadSeed(){
   const d=Date.now()-SEED_NOW, dd=Math.round(d/day)*day;
   return SEED.map(o=>{o=JSON.parse(JSON.stringify(o));if(o.t0)o.t0+=d;if(o.doneAt)o.doneAt+=d;o.due+=dd;(o.log||[]).forEach(l=>l.t+=d);return o});
@@ -330,7 +378,7 @@ function connect(){
   let list=null; try{list=JSON.parse(localStorage.getItem(STORE)||'null')}catch(e){}
   if(!Array.isArray(list)){list=loadSeed();orders=new Map(list.map(o=>[o.id,o]));saveOrders()}
   else orders=new Map(list.map(o=>[o.id,o]));
-  dbState='on'; render();
+  dbState='on'; render(); syncPendientes(false);
 }
 window.addEventListener('storage',e=>{if(e.key===STORE){try{orders=new Map(JSON.parse(e.newValue||'[]').map(o=>[o.id,o]))}catch(x){}safeRender()}});
 
@@ -348,22 +396,25 @@ async function bbddPost(body){
   const r=await fetch(c.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({...body,token:c.key})});
   const j=await r.json(); if(!j.ok) throw new Error(j.error||'error'); return j;
 }
+const CODIGOS=[['I1AFS','Afilado sierra'],['I1AFS I','Afilado incisor'],['I1AFF','Afilado fresa'],['I1AFC','Afilado cuchillo'],['I1AF15','Afilado fresa ranuradora'],['I1AFS CP','Cambio parcial placas'],['I1AFS CT','Cambio total placas'],['I1FAB FR','Evaluación fresa'],['I1FAB FR CP','Fresa cambio parcial'],['I1FAB FR CT','Fresa cambio total'],['I1CABEZAL','Cabezal (customizado)'],['ART','Artículo (customizado)']];
 function codigoDe(desc){const D=String(desc).toUpperCase();
   if(/CAMBIO\s+TOTAL/.test(D))return 'I1AFS CT'; if(/CAMBIO|PLACA/.test(D))return 'I1AFS CP';
   if(/INCISOR/.test(D))return 'I1AFS I'; if(/FRESA/.test(D))return 'I1AFF'; if(/CUCHILLO/.test(D))return 'I1AFC';
   if(/AFILADO/.test(D))return 'I1AFS'; return '';}
-function tipoDe(items){const D=items.map(x=>(x.servicio||'')+' '+(x.detalle||'')+' '+(x.codigo||'')).join(' ').toUpperCase();
+function tipoDe(items){return servicioDe(items.map(x=>x.codigo||codigoDe(x.detalle||'')).join(' '));
+  const D=items.map(x=>(x.servicio||'')+' '+(x.detalle||'')+' '+(x.codigo||'')).join(' ').toUpperCase();
   return /SOLDAD|HUINCHA|CINTA/.test(D)?'Sierra huincha':/CAMBIO|PLACA| CP\b| CT\b/.test(D)?'Sierra circular':'Afilado simple';}
 function medidaDe(desc){const D=String(desc).toUpperCase();let dia=(D.match(/\bDE\s+(\d{2,4})\b/)||D.match(/\bD\s?(\d{2,4})\b/)||[])[1];const z=(D.match(/Z\s*=\s*(\d{1,3})/)||[])[1];
   return [dia?`Ø ${dia} mm`:'',z?`${z} Z`:'',/\bTP\b/.test(D)?'TP':'',/PCD/.test(D)?'PCD':''].filter(Boolean).join(' ');}
 function orderFromBBDD(d,station){
-  const ru=ROUTES[tipoDe(d.items)], tipo=tipoDe(d.items);
-  const i=ru.indexOf(station);
+  const tipo=tipoDe(d.items), ru=RUTA;
+  const st0=S(station)?station:'rec';
+  const i=ru.indexOf(st0);
   const fecha=d.fecha?new Date(d.fecha+'T12:00:00').getTime():Date.now();
   return {id:'OT-'+d.ot,cliente:d.cliente,tipo,medida:[...new Set(d.items.map(x=>medidaDe(x.detalle)).filter(Boolean))].join(' / ')||'—',
-    cant:d.items.reduce((a,x)=>a+(+x.cant||1),0),prio:'normal',due:fecha+(tipo==='Afilado simple'?4:10)*day,fechaOT:d.fecha,ruta:ru,paso:i>=0?i:0,estado:'cola',acc:0,t0:null,op:null,checks:{},tiempos:{},motivo:null,
-    bbdd:true,detalle:d.items.map(x=>`${x.cant} × ${x.detalle}`).join('\n'),
-    log:[{t:Date.now(),x:`Traída de base de prueba en ${S(i>=0?station:ru[0]).name}`+(local.op?.[station]?` · ${local.op[station]}`:'')}]};
+    cant:d.items.reduce((a,x)=>a+(+x.cant||1),0),prio:'normal',due:fecha+(tipo==='Afilado'?4:10)*day,fechaOT:d.fecha,ruta:ru,paso:i>=0?i:0,estado:'cola',acc:0,t0:null,op:null,checks:{},tiempos:{},motivo:null,
+    bbdd:true,rut:d.rut||'',codigo:[...new Set(d.items.map(x=>x.codigo).filter(Boolean))].join(', '),detalle:d.items.map(x=>`${x.cant} × ${x.detalle}`).join('\n'),
+    log:[{t:Date.now(),x:`Traída de base de prueba en ${S(i>=0?station:ru[0]).name}`+(local.operario?` · ${local.operario}`:'')}]};
 }
 const fechaISO=f=>{const m=String(f||'').match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);return m?`${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`:/^\d{4}-\d\d-\d\d$/.test(f||'')?f:''};
 
@@ -372,8 +423,8 @@ const norm = s=>String(s??'').trim().toUpperCase().replace(/^INGEMAD[:\s]*/,'').
 function lookup(raw){
   const c=norm(raw); if(!c) return [];
   const ot = /^\d+$/.test(c)?'OT-'+c : c.replace(/^OT(\d)/,'OT-$1');
-  if(orders.has(ot)) return [orders.get(ot)];
-  const n=ot.replace(/^OT-0*/,'OT-'); return orders.has(n)?[orders.get(n)]:[];
+  const n=ot.replace(/^OT-0*/,'OT-');
+  return piecesOf(n).sort((a,b)=>(cur(b)===view)-(cur(a)===view)||(a.estado==='despachada')-(b.estado==='despachada'));
 }
 function stationFromCode(raw){
   const t=String(raw||'').trim(); const m=t.match(/#([a-z]+)\s*$/i)||t.match(/^EST[:\-\s]*([a-z]+)$/i);
@@ -396,22 +447,97 @@ function handleScan(raw){
 function openOrder(o){ui.sel=o.id; ui.picks=null; ui.scanMsg=null; render()}
 /* ---------- actions ---------- */
 function checksOk(o){const s=S(cur(o));return s.checks.every((c,i)=>{const v=(o.checks||{})[i];return typeof c==='object'?v!==undefined&&v!=='':!!v})}
-function entrada(o){o.op=local.op[view];o.estado='proceso';o.t0=Date.now();log(o,((o.acc||0)?'Reanuda ':'Entrada a ')+S(cur(o)).name);persist(o)}
-function salida(o){
+function entrada(o){setTimeout(()=>avanceOT(o),0);const esp=o.colaDesde&&!(o.acc>0)?Math.round((Date.now()-o.colaDesde)/6e3)/10:'';o.op=local.operario;o.estado='proceso';o.t0=Date.now();registrar(o,'Inicio',{op:o.op,min:esp,nota:esp!==''?'Minutos = espera en cola':''});o.colaDesde=null;o.llegada=null;log(o,((o.acc||0)?'Reanuda ':'Entrada a ')+S(cur(o)).name);persist(o)}
+function llegada(o,st){
+  const prev=cur(o), now=Date.now();
+  if(o.estado==='proceso'||o.estado==='pausa'){        // fase anterior abierta: se cierra con la hora de llegada
+    if(o.estado==='proceso'&&o.t0){o.acc=(o.acc||0)+now-o.t0;o.t0=null}
+    o.tiempos={...(o.tiempos||{}),[prev]:(o.tiempos?.[prev]||0)+(o.acc||0)};
+    registrar(o,'Término',{fase:S(prev).name,min:Math.round((o.acc||0)/6e3)/10,pasaA:S(st).name,op:o.op,nota:`Cerrada al llegar a ${S(st).name}`});
+    log(o,`${S(prev).name} cerrada automáticamente al llegar a ${S(st).name} (${fmtMin(o.acc||0)})`);
+    o.autoCierre=(o.autoCierre||0)+1;
+  }
+  o.acc=0;o.op=null;o.checks={};o.paso=o.ruta.indexOf(st);o.estado='cola';o.llegada=now;o.colaDesde=now;
+  registrar(o,'Llegada',{fase:S(st).name,op:local.operario||''});
+  log(o,`Llegada a ${S(st).name}`);avanceOT(o);persist(o);
+  ui.scanMsg={k:'in',t:`Llegada a ${S(st).name} registrada · ${hhmm(now)}`,s:'Queda en cola. Presiona Iniciar cuando la máquina parta.'};
+}
+function salida(o,destino,nota){        // destino: id de estación o 'ok'
   const stn=cur(o); if(o.estado==='proceso'&&o.t0){o.acc=(o.acc||0)+Date.now()-o.t0;o.t0=null}
-  o.tiempos={...(o.tiempos||{}),[stn]:o.acc||0}; log(o,`Salida de ${S(stn).name} (${fmtMin(o.acc||0)})`);
+  o.tiempos={...(o.tiempos||{}),[stn]:(o.tiempos?.[stn]||0)+(o.acc||0)}; log(o,`Salida de ${S(stn).name} (${fmtMin(o.acc||0)})`);
+  registrar(o,'Término',{min:Math.round((o.acc||0)/6e3)/10,pasaA:destino==='ok'?'OK':S(destino).name,op:o.op,nota:nota||''});
   o.acc=0;o.checks={};o.op=null;
   let nx;
-  if(o.paso>=o.ruta.length-1){o.estado='despachada';o.doneAt=Date.now();nx='Despachada'}
-  else{o.paso++;o.estado='cola';nx=S(cur(o)).name}
+  if(destino==='ok'){o.estado='despachada';o.doneAt=Date.now();nx='Terminada';avanceOT(o)}
+  else{o.paso=o.ruta.indexOf(destino);o.estado='cola';o.colaDesde=Date.now();o.llegada=null;nx=S(destino).name;avanceOT(o)}
   persist(o); return nx;
+}
+/* trae las OT abiertas de la base y las pone en la fila de su fase */
+async function syncPendientes(manual){
+  if(!bbddOn()) return;
+  try{const r=await bbddGet({action:'pendientes'});let n=0,u=0;
+    BASE_AVG=r.promedios||{};
+    if(r.estaciones){EST=r.estaciones;try{localStorage.setItem('ingemad-est',JSON.stringify(EST))}catch(e){}}
+    r.ots.forEach(d=>{
+      const ot='OT-'+d.ot; AV_SENT[ot]=AV_SENT[ot]||d.avance;
+      let ps=piecesOf(ot);
+      const bp=d.app?.piezas||{}, names=Object.keys(bp);
+      if(!ps.length){
+        const st=(STATIONS.find(x=>x.avance.toLowerCase()===String(d.avance).toLowerCase())||{id:'rec'}).id;
+        const base=orderFromBBDD(d,st);base.log=[{t:Date.now(),x:`Cargada desde la base (AVANCE TALLER: ${d.avance})`}];n++;
+        if(!names.length||(names.length===1&&names[0]===ENTERA)){if(bp[ENTERA])aplicarEstado(base,bp[ENTERA]);orders.set(base.id,base);return}
+        names.forEach((nmz,i)=>{const p={...JSON.parse(JSON.stringify(base)),id:`${ot}-${i+1}`,ot,pieza:nmz};aplicarEstado(p,bp[nmz]);orders.set(p.id,p)});return}
+      if(!names.length) return;
+      const locales=ps.map(piezaOf);
+      if(names.slice().sort().join('|')!==locales.slice().sort().join('|')&&d.app.ts>Math.max(...ps.map(p=>p.upd||0))){   // otro celular separó la herramienta
+        const base=ps[0]; ps.forEach(p=>orders.delete(p.id));
+        names.forEach((nmz,i)=>{const p={...JSON.parse(JSON.stringify(base)),id:nmz===ENTERA?ot:`${ot}-${i+1}`,ot:nmz===ENTERA?undefined:ot,pieza:nmz===ENTERA?undefined:nmz};aplicarEstado(p,bp[nmz]);orders.set(p.id,p)});u++;return}
+      ps.forEach(p=>{const a=bp[piezaOf(p)];if(a&&a.ts>(p.upd||0)&&!(ui.sel===p.id&&(ui.choosing||ui.blocking||ui.separating))){aplicarEstado(p,a);u++}});
+    });
+    saveOrders();if(!document.querySelector('#otform')&&!ui.separating)render();
+    if(manual)toast(n||u?`${n} OT nuevas · ${u} actualizadas desde la base`:'Todo al día con la base');
+  }catch(e){if(manual)toast('No pude leer la base de prueba',true)}
+}
+setInterval(()=>{if(document.visibilityState==='visible')syncPendientes(false)},30000);
+/* una fila por evento en la pestaña "Registro App" */
+const enBase=o=>bbddOn()&&(o.bbdd||o.photo);
+function registrar(o,evento,extra={}){
+  if(!enBase(o)) return;
+  const fase=extra.fase||S(cur(o))?.name||'';
+  bbddPost({action:'registro',ot:otNum(o),pieza:o.pieza||'',fase,evento,operario:extra.op??o.op??local.operario??'',minutos:extra.min??'',pasaA:extra.pasaA||'',nota:extra.nota||'',ts:Date.now()})
+    .catch(()=>{(o.regPend=o.regPend||[]).push({evento,fase,...extra,ts:Date.now()});persist(o)});
+}
+let BASE_AVG={};
+const stByName=n=>STATIONS.find(x=>x.name===n||x.avance.toLowerCase()===String(n).toLowerCase());
+function aplicarEstado(o,a){
+  const st=stByName(a.fase); if(st) o.paso=o.ruta.indexOf(st.id);
+  if(a.estado==='terminada'){o.estado='despachada';o.doneAt=a.ts}
+  else{o.estado=a.estado;o.t0=a.t0||null;o.acc=a.acc||0;o.op=a.op||null;if(a.motivo)o.motivo=a.motivo;o.llegada=a.llegada||null;o.colaDesde=a.estado==='cola'?(a.llegada||a.colaDesde||o.colaDesde||null):null}
+  o.upd=a.ts;
+}
+/* AVANCE TALLER = fase del componente más atrasado; OK solo cuando todos terminan */
+const AV_SENT={};
+function valorAvance(ot){
+  const ps=piecesOf(ot), nr=p=>p.estado==='bloqueada'&&p.motivo==='No reparable';
+  const abiertas=ps.filter(p=>p.estado!=='despachada'&&!nr(p));
+  if(!abiertas.length) return ps.length&&ps.every(nr)?'NO REPARABLE':'OK';
+  return S(RUTA[Math.min(...abiertas.map(p=>p.paso))]).avance;
+}
+function avanceOT(o){
+  if(!enBase(o)) return;
+  const ot=otOf(o), val=valorAvance(ot);
+  if(AV_SENT[ot]===val) return; AV_SENT[ot]=val;
+  bbddPost({action:'avance',ot:otNum(o),avance:val}).then(r=>{
+    if(r.found===false){delete AV_SENT[ot];return}
+    log(o,`Base: AVANCE TALLER de ${ot} = ${val}`);persist(o);if(ui.sel===o.id)render();
+  }).catch(()=>{delete AV_SENT[ot];toast(`No pude actualizar AVANCE TALLER de ${ot}`,true)});
 }
 
 /* ---------- render ---------- */
 function renderTabs(){
   const tabs=[{id:'sup',name:'Supervisor'},...STATIONS];
   $('#tabs').innerHTML=tabs.map(t=>`<button class="tab" data-tab="${t.id}" aria-current="${view===t.id}">${t.name}${t.id==='sup'?'':`<span class="n">${atStation(t.id).length}</span>`}</button>`).join('');
-  const c=$('#conn'); c.className='conn '+(dbState==='on'?'on':dbState==='off'?'off':''); c.textContent=dbState==='on'?'Maqueta · datos en este equipo':dbState==='off'?'Sin conexión a la base':'Conectando…';
+  const c=$('#conn'); c.className='conn '+(dbState==='on'?'on':dbState==='off'?'off':''); c.textContent=dbState==='on'?(bbddOn()?'Base de prueba · sincronizada':'Sin base · datos en este equipo'):dbState==='off'?'Sin conexión a la base':'Conectando…';
 }
 const QR_ICO=`<svg class="qr-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 7V3h4M17 3h4v4M21 17v4h-4M7 21H3v-4"/><rect x="7" y="7" width="4" height="4" fill="currentColor" stroke="none"/><rect x="13" y="13" width="4" height="4" fill="currentColor" stroke="none"/><path d="M13 7h4v3M7 13v4h3"/></svg>`;
 
@@ -419,7 +545,9 @@ const QR_ICO=`<svg class="qr-ico" viewBox="0 0 24 24" fill="none" stroke="curren
 function avgFor(st,tipo){
   const same=all().filter(o=>o.tipo===tipo).map(o=>(o.tiempos||{})[st]).filter(Boolean);
   const any=all().map(o=>(o.tiempos||{})[st]).filter(Boolean);
-  const v=same.length>=2?same:any; if(!v.length) return null;
+  const v=same.length>=2?same:any;
+  const b=BASE_AVG[S(st)?.name]; if(b&&b.n>=v.length) return {m:b.min*6e4,n:b.n,scope:'registro base'};
+  if(!v.length) return null;
   return {m:v.reduce((x,y)=>x+y,0)/v.length,n:v.length,scope:same.length>=2?tipo:'todas las OT'};
 }
 function cmpInfo(ms,a){
@@ -441,14 +569,17 @@ function cmpBar(o,big){
 function renderStation(){
   const s=S(view), list=atStation(view);
   const sel=ui.sel?orders.get(ui.sel):null;
-  const op=local.op?.[view]||'';
+  const op=local.operario||'';
   const panel=ui.loading?`<div class="work"><div class="banner in"><b>${esc(ui.loading)}</b></div></div>`:ui.ocr?ocrPanel():ui.newForm?newForm():ui.notFound?notFoundPanel():ui.result?resultPanel():ui.created?createdPanel(ui.created):ui.picks?picksPanel():sel?work(sel,s):'';
   $('#view').innerHTML=`
   <div class="st-head">
-    <div><div class="label">Estación</div><h1>${s.name}</h1></div>
+    <div><div class="label">Estación</div><h1>${s.name}</h1><div class="scanstate ${scanOK(view)?'on':''}">${scanOK(view)?'● QR escaneado · Iniciar habilitado':'○ Escanea el QR de la estación para iniciar'}</div>
+      ${view!=='rec'?`<button class="linkbtn estbtn" data-act="${fuera(view)?'est-on':'est-off'}">${fuera(view)?'Volver a habilitar esta estación':'⛔ Marcar fuera de servicio'}</button>`:''}</div>
     <label class="op"><span class="label">Operador</span>
       <select id="op" class="${op?'':'need'}"><option value="">Elige tu nombre…</option>${OPERATORS.map(n=>`<option ${n===op?'selected':''}>${n}</option>`).join('')}</select></label>
   </div>
+  ${fuera(view)?`<div class="banner bad" style="margin-bottom:14px"><b>⛔ ${s.name} fuera de servicio${EST[view].motivo?' · '+esc(EST[view].motivo):''}</b><span>${altDe(view)?`Usa <b>${S(altDe(view)).name}</b> mientras tanto. Las piezas que lleguen aquí se derivan allá.`:'Deriva las piezas a otra estación.'}</span></div>`:''}
+  ${ui.estForm?estForm():''}
   <form class="scan" id="scanform" autocomplete="off">
     <input id="scan" placeholder="N° de OT" aria-label="Número de OT" inputmode="numeric" enterkeyhint="search">
     <button class="btn primary" type="submit">Buscar</button>
@@ -465,59 +596,90 @@ function renderStation(){
 function card(o,sel){
   const run=o.estado==='proceso';
   return `<button class="card ${run?'running':''}" data-sel="${o.id}" aria-pressed="${!!sel&&sel.id===o.id}">
-    <span class="id">${o.id}</span><span class="cr">${run?`<span class="mono tm" data-tm="${o.id}">${fmt(elapsed(o))}</span>`:chip(o)}</span>
+    <span class="id">${otOf(o)}${o.pieza?` <span class="pz">${esc(o.pieza)}</span>`:''}</span><span class="cr">${run?`<span class="mono tm" data-tm="${o.id}">${fmt(elapsed(o))}</span>`:chip(o)}</span>
     <span class="cl">${esc(o.cliente)}</span>
     <span class="sp">${esc(o.tipo)} · ${esc(o.medida)} · ${o.cant} u.</span>
-    ${run?cmpBar(o,false):`<span class="ft">${o.prio==='alta'?'<span class="pri alta">Urgente</span>':''}${o.ejemplo?'<span class="ex">Ejemplo</span>':''}${o.bbddPend?'<span class="ex" style="color:var(--bad);border-color:var(--bad)">Envío pendiente</span>':o.photo?'<span class="ex">Desde foto</span>':o.bbdd?'':o.manual?'<span class="ex">Ingresada en taller</span>':''} ${dueTxt(o)}</span>`}
+    ${run?cmpBar(o,false):`<span class="ft">${o.estado==='cola'&&o.colaDesde?`<span class="hint">${o.llegada?'Llegó':'Espera'} ${fmtMin(Date.now()-o.colaDesde)}</span>`:''}${o.prio==='alta'?'<span class="pri alta">Urgente</span>':''}${o.ejemplo?'<span class="ex">Ejemplo</span>':''}${o.bbddPend?'<span class="ex" style="color:var(--bad);border-color:var(--bad)">Envío pendiente</span>':o.photo?'<span class="ex">Desde foto</span>':o.bbdd?'':o.manual?'<span class="ex">Ingresada en taller</span>':''} ${dueTxt(o)}</span>`}
     ${run&&o.op?`<span class="sp">${esc(o.op)}</span>`:''}</button>`;
 }
 function resultPanel(){
   const r=ui.result, o=orders.get(r.id), c=cmpInfo(r.ms,r.avg);
   return `<div class="work">
-    <div class="done-head"><span class="big-ok">✓</span><div><div class="label">Terminado en ${esc(r.stName)}</div><div class="w-id">${r.id}</div><div class="w-cl">${esc(o?.cliente||'')}</div></div></div>
+    <div class="done-head"><span class="big-ok">✓</span><div><div class="label">Terminado en ${esc(r.stName)}</div><div class="w-id">${o?otOf(o):r.id}</div>${o?.pieza?`<div class="pzbig">${esc(o.pieza)}</div>`:''}<div class="w-cl">${esc(o?.cliente||'')}</div></div></div>
     <div class="stats">
       <div><span class="label">Tiempo</span><b>${fmtMin(r.ms)}</b></div>
       <div><span class="label">Promedio</span><b>${r.avg?fmtMin(r.avg.m):'—'}</b></div>
       <div><span class="label">Diferencia</span><b class="c-${c.k}">${r.avg?(r.ms>=r.avg.m?'+':'−')+Math.abs(Math.round((r.ms-r.avg.m)/6e4))+' min':'—'}</b></div>
     </div>
     <div class="cmptxt c-${c.k}" style="font-size:16px">${c.txt}</div>
-    <div class="newstate"><span class="label">Nuevo estado</span>${o?chip(o):''}<b>${r.next==='Despachada'?'Despachada':'En la fila de '+esc(r.next)}</b></div>
+    <div class="newstate"><span class="label">Nuevo estado</span>${o?chip(o):''}<b>${r.next==='Terminada'?(o&&o.pieza?'Componente terminado':'Terminada'):'En la fila de '+esc(r.next)}</b></div>
+    ${o?(()=>{const ps=piecesOf(otOf(o)),ok=ps.filter(p=>p.estado==='despachada').length;return `<div class="hint">${ps.length>1?`${otOf(o)}: ${ok} de ${ps.length} componentes terminados · `:''}AVANCE TALLER = <b>${valorAvance(otOf(o))}</b></div>`})():''}
     <button class="btn xl primary" data-act="clearres">Siguiente OT</button></div>`;
+}
+function estForm(){const id=ui.estForm;return `<div class="chooser" style="margin-bottom:14px"><b>¿Por qué ${S(id).name} queda fuera de servicio?</b>
+  <div class="reasons">${['Mantención','Falla','Sin operario','Otro'].map(m=>`<button class="btn sm" data-act="est-motivo" data-m="${m}">${m}</button>`).join('')}</div>
+  <span class="hint">Alternativa: <b>${altDe(id)?S(altDe(id)).name:'ninguna definida (configúrala en Supervisor)'}</b></span>
+  <button class="linkbtn" data-act="est-cancel" style="align-self:flex-start">Cancelar</button></div>`}
+async function setEstacion(id,fueraV,motivo){
+  const alt=altDe(id); EST[id]={...(EST[id]||{}),fuera:fueraV,motivo:motivo||'',alt,desde:Date.now()};
+  try{localStorage.setItem('ingemad-est',JSON.stringify(EST))}catch(e){}
+  ui.estForm=null;render();toast(fueraV?`${S(id).name} fuera de servicio`:`${S(id).name} habilitada`);
+  if(bbddOn())try{const r=await bbddPost({action:'estacion',id,fuera:fueraV,motivo:motivo||'',alt,nombre:S(id).name,por:local.operario||''});if(r.estaciones){EST=r.estaciones;render()}}catch(e){toast('No pude guardar el estado en la base',true)}
+}
+function separar(o,names){
+  const ot=otOf(o), now=Date.now();
+  registrar(o,'Separación',{nota:names.join(' | ')});
+  orders.delete(o.id);
+  const nuevos=names.map((n,i)=>{const p={...JSON.parse(JSON.stringify(o)),id:`${ot}-${i+1}`,ot,pieza:n,estado:'cola',acc:0,t0:null,op:null,colaDesde:now,llegada:null,checks:{},
+    log:[{t:now,x:`Separada de ${ot} en ${S(cur(o)).name}`},...(o.log||[])].slice(0,40)};orders.set(p.id,p);return p});
+  saveOrders(); ui={sel:null,picks:{q:ot,list:nuevos},scanMsg:{k:'in',t:`${ot} separada en ${names.length} componentes`,s:'Elige el componente que vas a trabajar.'}};render();
 }
 function msgBanner(){const m=ui.scanMsg;if(!m)return '';return `<div class="banner ${m.k}"><b>${esc(m.t)}</b>${m.s?`<span>${esc(m.s)}</span>`:''}</div>`}
 function picksPanel(){
-  return `<div class="work"><div><div class="label">Orden de compra ${esc(ui.picks.q)}</div><h2>${ui.picks.list.length} OT asociadas</h2></div>
-    <p class="hint" style="margin:0">Elige la sierra que tienes en la mano.</p>
-    <div class="picklist">${ui.picks.list.map(o=>`<button class="card" data-pick="${o.id}"><span class="id">${o.id}</span>${chip(o)}<span class="cl">${esc(o.cliente)}</span><span class="sp">${esc(o.tipo)} · ${esc(o.medida)} · ${o.cant} u. · en ${o.estado==='despachada'?'—':S(cur(o)).name}</span></button>`).join('')}</div></div>`;
+  return `<div class="work"><div><div class="label">${esc(otOf(ui.picks.list[0]))}</div><h2>${ui.picks.list.length} componentes</h2></div>
+    <p class="hint" style="margin:0">Elige el componente que tienes en la mano.</p>
+    <div class="picklist">${ui.picks.list.map(o=>`<button class="card" data-pick="${o.id}"><span class="id">${esc(o.pieza||ENTERA)}</span>${chip(o)}<span class="cl">${esc(o.cliente)}</span><span class="sp">${esc(o.tipo)} · ${esc(o.medida)} · ${o.cant} u. · en ${o.estado==='despachada'?'—':S(cur(o)).name}</span></button>`).join('')}</div></div>`;
 }
 function work(o,s){
-  const here=cur(o)===view, done=o.estado==='despachada', opOk=!!local.op?.[view];
+  const here=cur(o)===view, done=o.estado==='despachada', opOk=!!local.operario;
   const next=o.ruta[o.paso+1], inRoute=o.ruta.includes(view);
   let main='', sec='', warn='';
+  const scanned=scanOK(view)&&!fuera(view);
+  const lockBtn=fuera(view)?`<div class="scanlock"><span class="big">⛔</span><div><b>${s.name} está fuera de servicio</b><span>${altDe(view)?`Lleva la pieza a ${S(altDe(view)).name}.`:'Deriva la pieza a otra estación.'}</span></div></div>`:`<div class="scanlock"><span class="big">⌗</span><div><b>Escanea el QR de ${s.name} para iniciar</b><span>Así queda registrado que la sierra pasó por la máquina.</span></div></div>`;
   if(done) warn=`<div class="banner out"><b>Despachada ${o.doneAt?hhmm(o.doneAt):''}</b></div>`;
   else if(!here){
-    warn=`<div class="banner warn"><b>Esta OT está en la fila de ${S(cur(o)).name}${o.estado==='proceso'?' (en proceso)':''}.</b><span>${inRoute?`Si la sierra ya está en ${s.name}, puedes iniciarla aquí. Las estaciones intermedias quedan sin tiempo.`:`${esc(o.tipo)} no pasa por ${s.name}.`}</span></div>`;
-    if(inRoute) main=`<button class="btn xl go" data-act="force" ${opOk?'':'disabled'}>▶ Iniciar aquí</button>`;
-  } else if(o.estado==='cola') main=`<button class="btn xl go" data-act="start" ${opOk?'':'disabled'}>▶ Iniciar</button>`;
-  else if(o.estado==='pausa') main=`<button class="btn xl go" data-act="start" ${opOk?'':'disabled'}>▶ Reanudar</button>`;
+    const abierta=o.estado==='proceso'||o.estado==='pausa';
+    warn=`<div class="banner warn"><b>Esta OT figura en ${S(cur(o)).name}${o.estado==='proceso'?' (en proceso)':o.estado==='pausa'?' (en pausa)':''}.</b><span>${inRoute?`Si la herramienta ya llegó a ${s.name}, registra la llegada.${abierta?` La fase ${S(cur(o)).name} se cerrará automáticamente con la hora de llegada.`:''}`:`${esc(o.tipo)} no pasa por ${s.name}.`}</span></div>`;
+    if(inRoute) main=scanned?`<button class="btn xl primary" data-act="arrive">📥 Registrar llegada a ${s.name}</button>`:lockBtn.replace('para iniciar','para registrar la llegada');
+  } else if(o.estado==='cola') main=scanned?`<button class="btn xl go" data-act="start" ${opOk?'':'disabled'}>▶ Iniciar</button>`:lockBtn;
+  else if(o.estado==='pausa') main=scanned?`<button class="btn xl go" data-act="start" ${opOk?'':'disabled'}>▶ Reanudar</button>`:lockBtn;
+  else if(o.estado==='proceso'&&ui.choosing){ const nx=o.ruta[o.paso+1];
+    main=`<div class="chooser"><b>¿A qué fase pasa ${esc(nm(o))}?</b><div class="nextgrid">${STATIONS.filter(x=>x.id!==view&&x.id!=='rec').map(x=>fuera(x.id)&&altDe(x.id)&&!fuera(altDe(x.id))?`<button class="btn alt" data-next="${altDe(x.id)}" data-reemp="${x.id}">${x.name} ⛔ <small>→ ${S(altDe(x.id)).name}</small></button>`:fuera(x.id)?`<button class="btn" disabled>${x.name} ⛔</button>`:`<button class="btn ${x.id===nx?'primary':''}" data-next="${x.id}">${x.name}</button>`).join('')}<button class="btn go" data-next="ok">✓ Terminada (OK)</button></div><button class="linkbtn" data-act="cancelnext">Volver</button></div>`; }
   else if(o.estado==='proceso'){ main=`<button class="btn xl stop" data-act="finish">■ Terminar</button>`; sec=`<button class="btn" data-act="pause">Pausar</button><button class="btn danger" data-act="block">Bloquear</button>`}
   else if(o.estado==='bloqueada'){ main=`<button class="btn xl primary" data-act="unblock">Desbloquear</button>` }
-  if(here&&(o.estado==='cola'||o.estado==='pausa')) sec=`<button class="btn danger" data-act="block">Bloquear</button>`;
+  if(here&&(o.estado==='cola'||o.estado==='pausa')) sec=`${!o.pieza?`<button class="btn" data-act="separar">🔧 Separar en componentes</button>`:''}<button class="btn danger" data-act="block">Bloquear</button>`;
+  if(ui.separating&&here&&!o.pieza){const tp=tipoHerr(o);main=`<div class="chooser" id="sepbox"><b>Componentes de ${otOf(o)} · ${tp}</b>
+    <span class="hint">Marca los componentes que se separan. Cada uno avanza por su cuenta; la OT termina cuando todos terminan.</span>
+    <div class="checks">${[...new Set([...(PLANTILLAS[tp]||[]),...(ui.sepExtra||[])])].map((n,i)=>`<label class="chk on"><input type="checkbox" class="sepck" value="${esc(n)}" checked><span style="text-decoration:none;color:var(--ink)">${esc(n)}</span></label>`).join('')}</div>
+    <div class="noteform"><input id="sep-new" placeholder="Otro componente (ej. Contracuchillo)" autocomplete="off"><button type="button" class="btn sm" data-act="sep-add">Agregar</button></div>
+    <div class="actions"><button class="btn primary" data-act="sep-ok">Separar</button><button class="btn" data-act="sep-cancel">Cancelar</button></div></div>`;sec=''}
+  const espera=here&&o.estado==='cola'&&o.colaDesde?`<div class="hint">${o.llegada?'Llegó':'En cola'} hace <b>${fmtMin(Date.now()-o.colaDesde)}</b>${o.llegada?` (${hhmm(o.llegada)})`:''}</div>`:'';
   const showTimer=here&&!done&&(o.estado==='proceso'||o.estado==='pausa'||o.estado==='bloqueada'||(o.acc||0)>0);
   const a=here&&!done?avgFor(view,o.tipo):null;
   const ck=o.checks||{}, editable=here&&o.estado==='proceso';
   return `<section class="work ${o.estado==='bloqueada'?'blocked':''}" aria-label="OT ${o.id}">
     ${msgBanner()}
     <div class="w-top">
-      <div style="min-width:0"><div class="w-id">${o.id}</div><div class="w-cl">${esc(o.cliente)}</div></div>
+      <div style="min-width:0"><div class="w-id">${otOf(o)}</div>${o.pieza?`<div class="pzbig">${esc(o.pieza)}</div>`:''}<div class="w-cl">${esc(o.cliente)}</div></div>
       <div class="state-big">${chip(o)}${o.prio==='alta'?'<span class="pri alta">Urgente</span>':''}${o.ejemplo?'<span class="ex">Ejemplo</span>':''}</div>
     </div>
     <div class="specs">
+      ${o.codigo?`<div><span class="label">Código</span><b class="mono">${esc(o.codigo)}</b></div>`:''}
+      ${o.rut?`<div><span class="label">RUT cliente</span><b class="mono">${esc(o.rut)}</b></div>`:''}
       ${o.fechaOT?`<div><span class="label">Fecha OT</span><b>${new Date(o.fechaOT+'T12:00').toLocaleDateString('es-CL',{day:'numeric',month:'short'})}</b></div>`:''}
       <div><span class="label">Servicio</span><b>${esc(o.tipo)}</b></div>
       <div><span class="label">Medida</span><b class="mono">${esc(o.medida)}</b></div>
       <div><span class="label">Cantidad</span><b>${o.cant} u.</b></div>
-      <div><span class="label">Entrega</span><b>${new Date(o.due).toLocaleDateString('es-CL',{day:'numeric',month:'short'})}</b>${dueTxt(o)}</div>
       ${o.detalle?`<div style="grid-column:1/-1"><span class="label">Detalle OT</span><b style="white-space:pre-line;font-weight:500">${esc(o.detalle)}</b></div>`:''}
     </div>
     ${warn}
@@ -525,10 +687,13 @@ function work(o,s){
     ${showTimer?`<div class="timerbox"><div class="clock"><span class="timer" id="timer">${fmt(elapsed(o))}</span><span class="hint">${o.estado==='proceso'?'corriendo':'detenido'}${o.op?` · ${esc(o.op)}`:''}</span></div>${cmpBar(o,true)}</div>`
       :here&&!done?`<div class="hint">Promedio en ${s.name.toLowerCase()}: <b>${a?fmtMin(a.m):'sin datos aún'}</b>${a?` (${a.n} OT · ${esc(a.scope)})`:''}</div>`:''}
     ${ui.blocking?`<div class="blockbox"><b>¿Por qué se detiene?</b><div class="reasons">${BLOCK_REASONS.map(r=>`<button data-reason="${r}">${r}</button>`).join('')}</div><button class="linkbtn" data-act="cancelblock" style="align-self:flex-start;color:var(--bad)">Cancelar</button></div>`:''}
+    ${espera}
     ${main}
     ${main&&!opOk&&!done&&o.estado!=='proceso'&&o.estado!=='bloqueada'?'<div class="hint need-op">Elige tu nombre en Operador para iniciar.</div>':''}
-    ${here&&o.estado==='proceso'&&next?`<div class="hint">Al terminar pasa a la fila de <b>${S(next).name}</b>.</div>`:''}
+    ${here&&o.estado==='proceso'&&!ui.choosing?`<div class="hint">Al terminar eliges a qué fase pasa. La base se actualiza sola (AVANCE TALLER).</div>`:''}
     ${sec?`<div class="actions">${sec}</div>`:''}
+    ${(()=>{const ps=piecesOf(otOf(o));if(ps.length<2)return '';const ok=ps.filter(p=>p.estado==='despachada').length;
+      return `<div class="comps"><div class="label">Componentes de ${otOf(o)} · ${ok} de ${ps.length} terminados</div>${ps.map(p=>`<button class="comp ${p.id===o.id?'me':''}" data-go="${cur(p)}" data-sel="${p.id}"><b>${esc(p.pieza)}</b><span>${p.estado==='despachada'?'✓ Terminado':esc(S(cur(p)).name)+' · '+stateLbl[p.estado]}</span></button>`).join('')}</div>`})()}
     <details><summary>Ruta</summary>
       <div class="route" style="margin-top:10px">${o.ruta.map((r,i)=>`<div class="rstep ${done||i<o.paso?'done':i===o.paso?'now':''}"><span class="dot"></span>${S(r).name}${(o.tiempos||{})[r]?`<small>${fmtMin(o.tiempos[r])}</small>`:''}</div>`).join('')}</div></details>
     ${here&&!done?`<details><summary>Lista de control (opcional)</summary>
@@ -547,7 +712,7 @@ function notFoundPanel(){
 }
 function newForm(){
   const tom=new Date(Date.now()+2*day).toISOString().slice(0,10), pf=ui.prefill||{};
-  const op=local.op?.[view];
+  const op=local.operario;
   const ph=pf.photo, toRec=!!pf.forceRec;
   return `<form class="work" id="otform"><div><div class="label">Agregar orden · ${toRec?'va a Recepción':S(view).name}</div><h2>${ph?'Revisa los datos leídos':'Datos de la orden'}</h2></div>
     ${ph?`<div class="ocr-prev"><img src="${ph}" alt="Foto de la OT"><div class="ocr-side">
@@ -557,11 +722,12 @@ function newForm(){
     ${pf.items&&pf.items.length?`<label class="full" style="display:flex;flex-direction:column;gap:4px"><span class="label">Detalle leído (${pf.items.length} ${pf.items.length>1?'ítems':'ítem'})</span><textarea id="f-det" rows="${Math.min(4,pf.items.length+1)}">${esc(pf.items.map(x=>`${x.cant} × ${x.desc}`).join('\n'))}</textarea></label>`:''}`:''}
     <div class="form">
       <label class="full"><span class="label">N° OT · obligatorio</span><input id="f-ot" required value="${esc(pf.ot||'')}" placeholder="Ej. 111859" class="mono" inputmode="numeric" style="font-size:20px"></label>
+      <label><span class="label">Fecha OT</span><input id="f-fecha" type="date" value="${esc(fechaISO(pf.fecha)||new Date().toISOString().slice(0,10))}"></label>
+      <label><span class="label">Código servicio</span><select id="f-cod">${(()=>{const sel=pf.codigo||codigoDe((pf.items||[]).map(x=>x.desc).join(' '))||'I1AFS';return CODIGOS.map(([c,n])=>`<option value="${c}" ${c===sel?'selected':''}>${c} · ${n}</option>`).join('')})()}</select></label>
       <label class="full"><span class="label">Cliente</span><input id="f-cl" placeholder="Opcional" value="${esc(pf.cliente||'')}">${pf.clienteOrig&&pf.clienteOrig!==pf.cliente?`<span class="hint">Corregido según BBDD (la foto decía “${esc(pf.clienteOrig)}”)</span>`:''}</label>
-      <label><span class="label">Servicio</span><select id="f-tipo">${Object.keys(ROUTES).map(k=>`<option ${pf.tipo===k?'selected':''}>${k}</option>`).join('')}</select></label>
+      <label><span class="label">RUT cliente</span><input id="f-rut" placeholder="Opcional · sin puntos ni guion" inputmode="numeric" value="${esc(pf.rut||'')}" class="mono">${pf.rut?'<span class="hint">Desde la base</span>':''}</label>
       <label><span class="label">Medida</span><input id="f-med" placeholder="Opcional · Ø 300 mm 96 Z" value="${esc(pf.medida||'')}"></label>
       <label><span class="label">Cantidad</span><input id="f-cant" type="number" min="1" value="${pf.cant||1}" required></label>
-      <label><span class="label">Entrega</span><input id="f-due" type="date" value="${tom}"></label>
       <label><span class="label">Prioridad</span><select id="f-pri"><option value="normal">Normal</option><option value="alta">Urgente</option></select></label>
       ${view!=='rec'&&!toRec?`<label class="chk full"><input type="checkbox" id="f-in" ${op?'checked':'disabled'}><span>Registrar entrada a ${S(view).name} ahora${op?` (${esc(op)})`:' — elige operador arriba'}</span></label>`:''}
     </div>
@@ -582,7 +748,8 @@ function renderSup(){
   const a=active(), today=new Date().setHours(0,0,0,0);
   const blocked=a.filter(o=>o.estado==='bloqueada'), late=a.filter(isLate);
   const shipped=all().filter(o=>o.estado==='despachada'&&o.doneAt>=today);
-  const attn=[...new Set([...blocked,...late])];
+  const largas=a.filter(o=>{if(o.estado!=='proceso')return false;const av=avgFor(cur(o),o.tipo);return av&&av.n>=2&&elapsed(o)>2*av.m});
+  const attn=[...new Set([...blocked,...largas,...late])];
   const ex=all().filter(o=>o.ejemplo).length;
   const avg=STATIONS.map(s=>{const v=all().map(o=>(o.tiempos||{})[s.id]).filter(Boolean);return {s,n:v.length,m:v.length?v.reduce((x,y)=>x+y,0)/v.length:0,q:atStation(s.id).length}});
   const bott=avg.reduce((b,x)=>x.q>b.q?x:b,avg[0]);
@@ -593,7 +760,7 @@ function renderSup(){
     ${ex?`<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span class="hint">${ex} OT de ejemplo cargadas</span><button class="btn sm" data-act="clearex">${ui.confirmClear?'Confirmar: borrar ejemplos':'Borrar ejemplos'}</button></div>`:''}</div>
   ${dbState==='off'?'<div class="banner warn" style="margin-bottom:16px"><b>Sin conexión a la base de datos.</b><span>Recarga la página.</span></div>':''}
   <div class="kpis">
-    <div class="kpi"><span class="label">OT en taller</span><b>${a.length}</b></div>
+    <div class="kpi"><span class="label">OT en taller</span><b>${new Set(a.map(otOf)).size}</b></div>
     <div class="kpi"><span class="label">En proceso</span><b>${a.filter(o=>o.estado==='proceso').length}</b></div>
     <div class="kpi ${blocked.length?'alert':''}"><span class="label">Bloqueadas</span><b>${blocked.length}</b></div>
     <div class="kpi ${late.length?'alert':''}"><span class="label">Atrasadas</span><b>${late.length}</b></div>
@@ -602,22 +769,27 @@ function renderSup(){
   <h2 style="margin-bottom:10px">Flujo por estación</h2>
   <div class="board-wrap"><div class="board" style="--cols:${STATIONS.length}">
     ${STATIONS.map(s=>{const l=atStation(s.id);return `<div class="lane"><h3>${s.name}<span class="mono">${l.length}</span></h3>
-      ${l.map(o=>`<button class="mini ${o.estado}" data-go="${s.id}" data-sel="${o.id}"><span class="id">${o.id}${o.prio==='alta'?' ▲':''}</span><span class="cl">${esc(o.cliente)}</span><span>${stateLbl[o.estado]}${o.estado==='proceso'?' · '+fmt(elapsed(o)):''}</span></button>`).join('')||'<span class="hint">Vacía</span>'}
+      ${l.map(o=>`<button class="mini ${o.estado}" data-go="${s.id}" data-sel="${o.id}"><span class="id">${otOf(o)}${o.prio==='alta'?' ▲':''}</span>${o.pieza?`<span class="pz">${esc(o.pieza)}</span>`:''}<span class="cl">${esc(o.cliente)}</span><span>${stateLbl[o.estado]}${o.estado==='proceso'?' · '+fmt(elapsed(o)):''}</span></button>`).join('')||'<span class="hint">Vacía</span>'}
     </div>`}).join('')}
   </div></div>
+  <div class="section"><h2>Estado de estaciones</h2>
+    <div class="estgrid">${STATIONS.filter(x=>x.id!=='rec').map(x=>`<div class="estrow ${fuera(x.id)?'off':''}"><div><b>${x.name}</b><span>${fuera(x.id)?`⛔ Fuera de servicio${EST[x.id].motivo?' · '+esc(EST[x.id].motivo):''}`:'● Operativa'}</span></div>
+      <label><span class="label">Alternativa</span><select data-alt="${x.id}"><option value="">—</option>${STATIONS.filter(y=>y.id!==x.id&&y.id!=='rec').map(y=>`<option value="${y.id}" ${altDe(x.id)===y.id?'selected':''}>${y.name}</option>`).join('')}</select></label>
+      <button class="btn sm ${fuera(x.id)?'primary':'danger'}" data-act="${fuera(x.id)?'est-on':'est-off'}" data-est="${x.id}">${fuera(x.id)?'Habilitar':'Fuera de servicio'}</button></div>`).join('')}</div>
+  </div>
   <div class="section"><h2>Requiere atención</h2>
-    ${attn.length?`<div class="attn">${attn.map(o=>`<div class="attn-row"><span class="mono"><b>${o.id}</b></span>
-      <span>${esc(o.cliente)} · en <b>${S(cur(o)).name}</b>${o.estado==='bloqueada'?` · <span class="late">${esc(o.motivo)}</span>`:''}</span>
+    ${attn.length?`<div class="attn">${attn.map(o=>`<div class="attn-row"><span class="mono"><b>${esc(nm(o))}</b></span>
+      <span>${esc(o.cliente)} · en <b>${S(cur(o)).name}</b>${o.estado==='bloqueada'?` · <span class="late">${esc(o.motivo)}</span>`:''}${largas.includes(o)?` · <span class="late">lleva ${fmtMin(elapsed(o))}, más del doble del promedio</span>`:''}</span>
       <span style="display:flex;gap:6px;align-items:center">${chip(o)} ${dueTxt(o)}</span></div>`).join('')}</div>`
       :'<div class="empty">No hay OT bloqueadas ni atrasadas.</div>'}
   </div>
   ${(()=>{const mm=all().filter(o=>o.manual);return mm.length?`<div class="section"><h2>Agregadas desde el taller</h2>
     <p class="hint" style="margin:0">No venían de la base. Verifica que existan en Random y márcalas como revisadas.</p>
-    <div class="attn">${mm.map(o=>`<div class="attn-row"><span class="mono"><b>${o.id}</b></span><span>${esc(o.cliente)} · ${esc((o.log||[]).slice(-1)[0]?.x||'')}</span><button class="btn sm" data-act="reviewed" data-id="${o.id}">Marcar revisada</button></div>`).join('')}</div></div>`:''})()}
+    <div class="attn">${mm.map(o=>`<div class="attn-row"><span class="mono"><b>${otOf(o)}</b></span><span>${esc(o.cliente)} · ${esc((o.log||[]).slice(-1)[0]?.x||'')}</span><button class="btn sm" data-act="reviewed" data-id="${o.id}">Marcar revisada</button></div>`).join('')}</div></div>`:''})()}
   <div class="section"><h2>Tiempos por estación</h2>
-    <div style="overflow-x:auto"><table><thead><tr><th>Estación</th><th class="num">En cola</th><th class="num">OT terminadas</th><th class="num">Tiempo prom.</th></tr></thead>
-    <tbody>${avg.map(x=>`<tr><td>${x.s.name}${x===bott&&x.q>1?' <span class="pri alta">Cuello de botella</span>':''}</td><td class="num">${x.q}</td><td class="num">${x.n}</td><td class="num">${x.n?fmtMin(x.m):'–'}</td></tr>`).join('')}</tbody></table></div>
-    <div class="hint">Los tiempos salen de la diferencia entre el escaneo de entrada y el de salida en cada estación.</div>
+    <div style="overflow-x:auto"><table><thead><tr><th>Estación</th><th class="num">En cola</th><th class="num">OT terminadas</th><th class="num">Tiempo prom.</th><th class="num">Espera prom.</th></tr></thead>
+    <tbody>${avg.map(x=>`<tr><td>${x.s.name}${x===bott&&x.q>1?' <span class="pri alta">Cuello de botella</span>':''}</td><td class="num">${x.q}</td><td class="num">${x.n}</td><td class="num">${x.n?fmtMin(x.m):(BASE_AVG[x.s.name]?.n?fmtMin(BASE_AVG[x.s.name].min*6e4):'–')}</td><td class="num">${BASE_AVG[x.s.name]?.esperaMin!=null?fmtMin(BASE_AVG[x.s.name].esperaMin*6e4):'–'}</td></tr>`).join('')}</tbody></table></div>
+    <div class="hint">Tiempo = Inicio → Término en la máquina. Espera = Llegada (o término de la fase anterior) → Inicio. Los promedios salen de la pestaña Registro App.</div>
   </div>
   <div class="section"><h2>Conexión base de prueba (Drive)</h2>
     <div class="import">
@@ -625,7 +797,8 @@ function renderSup(){
       <div class="form"><label class="full"><span class="label">URL del script (/exec)</span><input id="cfg-url" value="${esc(local.bbddUrl||BBDD_URL_DEF)}" placeholder="https://script.google.com/macros/s/…/exec"></label>
       <label><span class="label">Clave</span><input id="cfg-key" value="${esc(local.bbddKey||BBDD_KEY_DEF)}"></label></div>
       <div class="actions"><button class="btn sm primary" data-act="cfgsave">Guardar y probar</button>
-      ${all().some(o=>o.bbddPend)?`<button class="btn sm" data-act="retrybbdd">Reintentar envíos pendientes (${all().filter(o=>o.bbddPend).length})</button>`:''}</div>
+      <button class="btn sm" data-act="syncbbdd">Traer OT abiertas de la base</button>
+      ${all().some(o=>o.bbddPend||(o.regPend||[]).length)?`<button class="btn sm" data-act="retrybbdd">Reintentar envíos pendientes (${all().filter(o=>o.bbddPend).length})</button>`:''}</div>
     </div>
   </div>
   <div class="section"><h2>QR de estaciones</h2>
@@ -638,7 +811,7 @@ function renderSup(){
 
 function render(){renderTabs(); view==='sup'?renderSup():renderStation(); updRoute(); fillQR()}
 function go(v){view=v;local.view=v;saveLocal();ui={result:null,sel:null,blocking:false,newForm:false,created:null,picks:null,scanMsg:null};try{history.replaceState(null,'','#'+v)}catch(e){}render();window.scrollTo(0,0)}
-function updRoute(){const t=$('#f-tipo'),r=$('#f-route');if(!t||!r)return;const ru=ROUTES[t.value];r.textContent='Ruta: '+ru.map(x=>S(x).name).join(' → ')+(ru.includes(view)?(view!=='rec'?` · parte en ${S(view).name}`:''):` · ${t.value} no pasa por ${S(view).name}: parte en Recepción`);const fi=$('#f-in');if(fi&&!ru.includes(view)){fi.checked=false;fi.disabled=true}else if(fi&&local.op?.[view])fi.disabled=false}
+function updRoute(){const t=$('#f-tipo'),r=$('#f-route');if(!t||!r)return;const ru=ROUTES[t.value];r.textContent='Ruta: '+ru.map(x=>S(x).name).join(' → ')+(ru.includes(view)?(view!=='rec'?` · parte en ${S(view).name}`:''):` · ${t.value} no pasa por ${S(view).name}: parte en Recepción`);const fi=$('#f-in');if(fi&&!ru.includes(view)){fi.checked=false;fi.disabled=true}else if(fi&&local.operario)fi.disabled=false}
 
 /* ---------- station QR ---------- */
 const qrCache={};
@@ -650,7 +823,7 @@ function qrCanvas(text,size){
   const out=document.createElement('canvas');out.width=out.height=size;out.getContext('2d').drawImage(c,0,0);
   return qrCache[key]=out;
 }
-const stUrl=id=>APP_URL+'#'+id;
+const stUrl=id=>APP_URL+'?e='+QR_KEYS[id]+'#'+id;
 function fillQR(){document.querySelectorAll('img[data-qr]').forEach(i=>{const c=qrCanvas(stUrl(i.dataset.qr),220);if(c&&!i.src)i.src=c.toDataURL('image/png')})}
 function poster(g,s,x,y,w,h){
   g.fillStyle='#fff';g.fillRect(x,y,w,h);g.strokeStyle='#1b2326';g.lineWidth=Math.max(3,w/200);g.strokeRect(x+g.lineWidth/2,y+g.lineWidth/2,w-g.lineWidth,h-g.lineWidth);
@@ -704,14 +877,14 @@ function importCSV(text){
 
 function itemsDe(o){
   const lines=String(o.detalle||'').split('\n').map(l=>l.trim()).filter(Boolean);
-  const its=lines.map(l=>{const m=l.match(/^(\d{1,3})\s*[×x*]\s*(.+)$/);const d=(m?m[2]:l).trim();return {cant:m?+m[1]:1,detalle:d.toUpperCase(),codigo:codigoDe(d)}});
-  return its.length?its:[{cant:o.cant||1,detalle:o.medida&&o.medida!=='—'?o.medida:'',codigo:''}];
+  const its=lines.map(l=>{const m=l.match(/^(\d{1,3})\s*[×x*]\s*(.+)$/);const d=(m?m[2]:l).trim();return {cant:m?+m[1]:1,detalle:d.toUpperCase(),codigo:o.codigo||codigoDe(d)}});
+  return its.length?its:[{cant:o.cant||1,detalle:o.medida&&o.medida!=='—'?o.medida:'',codigo:o.codigo||''}];
 }
 async function enviarBBDD(o){
   o.bbddPend=true;persist(o);
   try{
-    const r=await bbddPost({action:'crear',ot:o.id.replace(/^OT-/,''),fecha:o.fechaOT||new Date().toISOString().slice(0,10),cliente:o.cliente==='Sin cliente'?'':o.cliente,items:itemsDe(o)});
-    o.bbddPend=false;if(r.cliente&&r.cliente!==o.cliente)o.cliente=r.cliente;
+    const r=await bbddPost({action:'crear',ot:otNum(o),fecha:o.fechaOT||new Date().toISOString().slice(0,10),cliente:o.cliente==='Sin cliente'?'':o.cliente,rut:o.rut||'',items:itemsDe(o)});
+    o.bbddPend=false;if(r.cliente&&r.cliente!==o.cliente)o.cliente=r.cliente;if(r.rut&&!o.rut)o.rut=r.rut;
     log(o,r.duplicada?'Ya existía en base de prueba':`Guardada en base de prueba (fila ${r.fila})`);persist(o);render();
     toast(r.duplicada?`${o.id} ya estaba en la BBDD`:`${o.id} guardada en base de prueba`);
   }catch(e){o.bbddPend=true;log(o,'No se pudo guardar en base de prueba');persist(o);render();toast('No se pudo guardar en la base de prueba: queda pendiente (Supervisor → Reintentar)',true)}
@@ -780,12 +953,12 @@ async function readOTPhoto(file){
   try{
     const r=await Tesseract.recognize(img.canvas,'spa',{logger:m=>{if(m.status==='recognizing text'&&ui.ocr){ui.ocr.pct=Math.round(m.progress*100);ui.ocr.msg='Leyendo la OT…';const b=$('#ocrbar');if(b)b.style.width=ui.ocr.pct+'%';const t=$('#ocrmsg');if(t)t.textContent=`Leyendo la OT… ${ui.ocr.pct}%`}}});
     const text=r.data.text||'', d=parseOT(text);
-    const ex=d.ot&&(orders.get('OT-'+d.ot)||orders.get(d.ot));
+    const ex=d.ot&&piecesOf('OT-'+d.ot)[0];
     if(ex){ui={sel:ex.id,ocr:null,scanMsg:{k:'in',t:`${ex.id} ya está en la app`,s:'La abrí para que la trabajes.'}};return render()}
     if(d.ot&&bbddOn()){ui.ocr.msg=`Leí la OT ${d.ot}. Buscando en base de prueba…`;ui.ocr.pct=100;render();
       try{const b=await bbddGet({action:'ot',ot:d.ot});
         if(b.found){const o=orderFromBBDD(b,'rec');o.photo=true;persist(o);ui={sel:o.id,ocr:null,scanMsg:{k:'in',t:`OT ${d.ot} encontrada en base de prueba`,s:'Usé los datos de la base. Quedó en la fila de Recepción.'}};return render()}
-        if(d.cliente){try{const c=await bbddGet({action:'cliente',q:d.cliente});if(c.match){d.clienteOrig=d.cliente;d.cliente=c.match.nombre}}catch(x){}}
+        if(d.cliente){try{const c=await bbddGet({action:'cliente',q:d.cliente});if(c.match){d.clienteOrig=d.cliente;d.cliente=c.match.nombre;d.rut=c.match.rut||''}}catch(x){}}
       }catch(x){toast('No pude consultar la BBDD: revisa los datos a mano',true)}}
     ui={sel:null,ocr:null,newForm:true,prefill:{...d,text,photo:img.thumb,forceRec:true}};render();
     toast(d.ot?`Leí la OT ${d.ot}: revisa cliente y medida`:'No encontré el N° de OT: elígelo o escríbelo');
@@ -803,16 +976,21 @@ document.addEventListener('click',e=>{
   if(t.dataset.cand){const f=$('#f-ot');if(f)f.value=t.dataset.cand;document.querySelectorAll('.cand').forEach(b=>b.classList.toggle('on',b===t));if(ui.prefill)ui.prefill.ot=t.dataset.cand;return}
   if(t.dataset.go){go(t.dataset.go);ui.sel=t.dataset.sel;return render()}
   if(t.dataset.pick){const o=orders.get(t.dataset.pick);if(o)openOrder(o,true);return}
-  if(t.dataset.sel){ui={sel:t.dataset.sel,blocking:false,newForm:false,created:null,picks:null,scanMsg:null};render();if(matchMedia('(max-width:820px)').matches)scrollTo({top:$('.work')?.offsetTop-70||0,behavior:'smooth'});return}
+  if(t.dataset.sel){ui={sel:t.dataset.sel,choosing:false,separating:false,blocking:false,newForm:false,created:null,picks:null,scanMsg:null};render();if(matchMedia('(max-width:820px)').matches)scrollTo({top:$('.work')?.offsetTop-70||0,behavior:'smooth'});return}
   if(t.id==='newot'){ui={sel:null,newForm:true,prefill:{}};return render()}
   if(t.dataset.act==='addfound'){ui={sel:null,newForm:true,prefill:{ot:ui.notFound}};return render()}
   const a=t.dataset.act;
   if(a==='clearres'){ui.result=null;render();setTimeout(()=>$('#scan')?.focus(),0);return}
   if(a==='cancelnew'){ui.newForm=false;ui.notFound=null;ui.prefill=null;return render()}
   if(a==='dlqr') return downloadStation(t.dataset.id);
+  if(a==='est-off'){const id=t.dataset.est||view;ui.estForm=id;if(view==='sup'){setEstacion(id,true,'');return}render();scrollTo(0,0);return}
+  if(a==='est-on'){setEstacion(t.dataset.est||view,false,'');return}
+  if(a==='est-motivo'){setEstacion(ui.estForm,true,t.dataset.m);return}
+  if(a==='est-cancel'){ui.estForm=null;render();return}
   if(a==='cfgsave'){local.bbddUrl=$('#cfg-url').value.trim();local.bbddKey=$('#cfg-key').value.trim();saveLocal();render();
     if(!bbddOn())return toast('Conexión borrada');bbddGet({action:'ping'}).then(()=>toast('Conectado a la base de prueba')).catch(e=>toast(e.message==='clave'?'La clave no coincide con la del script':'No pude conectar: revisa la URL',true));return}
-  if(a==='retrybbdd'){all().filter(o=>o.bbddPend).forEach(o=>enviarBBDD(o));return}
+  if(a==='syncbbdd'){syncPendientes(true);return}
+  if(a==='retrybbdd'){all().forEach(o=>{const q=o.regPend||[];o.regPend=[];q.forEach(e=>registrar(o,e.evento,e));persist(o)});all().filter(o=>o.bbddPend).forEach(o=>enviarBBDD(o));return}
   if(a==='reviewed'){const r=orders.get(t.dataset.id);if(r){r.manual=false;log(r,'Verificada en Random');persist(r);toast(`${r.id} revisada`);render()}return}
   if(a==='dlsheet') return downloadSheet();
   if(a==='clearex'){
@@ -822,20 +1000,29 @@ document.addEventListener('click',e=>{
   const o=ui.sel&&orders.get(ui.sel); if(!o) return;
   ui.scanMsg=null;
   if(t.dataset.reason){ if(o.estado==='proceso'&&o.t0){o.acc=(o.acc||0)+Date.now()-o.t0;o.t0=null}
-    o.estado='bloqueada';o.motivo=t.dataset.reason;ui.blocking=false;log(o,'Bloqueada: '+o.motivo);persist(o);toast(`${o.id} bloqueada`)}
+    o.estado='bloqueada';o.motivo=t.dataset.reason;ui.blocking=false;log(o,'Bloqueada: '+o.motivo);registrar(o,'Bloqueo',{nota:o.motivo});persist(o);avanceOT(o);toast(`${o.id} bloqueada`)}
+  else if((a==='start'||a==='arrive')&&!scanOK(view)){toast(`Escanea el QR de ${S(view).name} para iniciar`,true)}
   else if(a==='start'){entrada(o);ui.scanMsg={k:'in',t:`Iniciado ${hhmm(Date.now())}`}}
-  else if(a==='force'){const i=o.ruta.indexOf(view); if(i>=0){log(o,`Ingreso forzado a ${S(view).name} (estaba en ${S(cur(o)).name})`);o.paso=i;o.acc=0;o.t0=null;o.checks={};entrada(o);ui.scanMsg={k:'in',t:`Iniciado ${hhmm(Date.now())}`}}}
-  else if(a==='pause'){o.acc=(o.acc||0)+Date.now()-o.t0;o.t0=null;o.estado='pausa';log(o,'Pausa');persist(o)}
+  else if(a==='arrive'){llegada(o,view)}
+  else if(a==='pause'){const seg=Date.now()-o.t0;o.acc=(o.acc||0)+seg;o.t0=null;o.estado='pausa';log(o,'Pausa');registrar(o,'Pausa',{min:Math.round(seg/6e3)/10});persist(o)}
   else if(a==='block'){ui.blocking=true}
+  else if(a==='separar'){ui.separating=true;ui.sepExtra=[]}
+  else if(a==='sep-cancel'){ui.separating=false}
+  else if(a==='sep-add'){const v=($('#sep-new')?.value||'').trim();if(v){ui.sepExtra=[...(ui.sepExtra||[]),v]}}
+  else if(a==='sep-ok'){const names=[...document.querySelectorAll('.sepck:checked')].map(x=>x.value);if(names.length<2){toast('Marca al menos 2 componentes',true);return}ui.separating=false;separar(o,names);return}
   else if(a==='cancelblock'){ui.blocking=false}
-  else if(a==='unblock'){o.estado='pausa';o.motivo=null;log(o,'Desbloqueada');persist(o)}
-  else if(a==='finish'){const st=cur(o),ms=elapsed(o),avg=avgFor(st,o.tipo);const nx=salida(o);ui.sel=null;ui.result={id:o.id,ms,avg,next:nx,stName:S(st).name}}
+  else if(a==='unblock'){o.estado='pausa';o.motivo=null;log(o,'Desbloqueada');registrar(o,'Desbloqueo');persist(o)}
+  else if(a==='finish'){ui.choosing=true}
+  else if(a==='cancelnext'){ui.choosing=false}
+  else if(t.dataset.next){const st=cur(o),ms=elapsed(o),avg=avgFor(st,o.tipo);const rp=t.dataset.reemp,nx=salida(o,t.dataset.next,rp?`Reemplazo de ${S(rp).name} (fuera de servicio)`:'');if(rp)log(o,`${S(rp).name} fuera de servicio: derivada a ${S(t.dataset.next).name}`);ui.choosing=false;ui.sel=null;ui.result={id:o.id,ms,avg,next:nx,stName:S(st).name}}
   render();
 });
 document.addEventListener('change',e=>{
   const t=e.target;
-  if(t.id==='op'){local.op={...(local.op||{}),[view]:t.value};saveLocal();return render()}
+  if(t.id==='op'){local.operario=t.value;saveLocal();return render()}
   if(t.id==='f-tipo') return updRoute();
+  if(t.dataset.alt!==undefined){const id=t.dataset.alt;EST[id]={...(EST[id]||{}),alt:t.value};try{localStorage.setItem('ingemad-est',JSON.stringify(EST))}catch(e){}
+    if(bbddOn())bbddPost({action:'estacion',id,fuera:!!EST[id].fuera,motivo:EST[id].motivo||'',alt:t.value,nombre:S(id).name,por:local.operario||''}).catch(()=>{});toast(`Alternativa de ${S(id).name}: ${t.value?S(t.value).name:'ninguna'}`);return}
   if(t.id==='otphoto'&&t.files[0]){const f=t.files[0];t.value='';return readOTPhoto(f)}
   if(t.id==='csv'&&t.files[0]){const r=new FileReader();r.onload=()=>importCSV(String(r.result));r.readAsText(t.files[0]);return}
   const o=ui.sel&&orders.get(ui.sel); if(!o) return;
@@ -847,19 +1034,19 @@ document.addEventListener('submit',e=>{
   if(e.target.id==='scanform'){const v=$('#scan').value;if(v.trim())handleScan(v);return}
   if(e.target.id==='noteform'){const v=$('#note').value.trim();const o=ui.sel&&orders.get(ui.sel);if(v&&o){log(o,v);persist(o);render()}return}
   if(e.target.id==='otform'){
-    const tipo=$('#f-tipo').value, ru=ROUTES[tipo], pf=ui.prefill||{};
+    const pf=ui.prefill||{}, tipo=servicioDe($('#f-cod').value), ru=RUTA;
     const num=norm($('#f-ot').value).replace(/^OT-?/,'').replace(/^0+/,'');
     if(!/^\d{3,10}$/.test(num)) return toast('Escribe el N° de OT (solo números)',true);
     const id='OT-'+num;
-    if(orders.has(id)) return toast(`${id} ya está en la app`,true);
+    if(piecesOf(id).length) return toast(`${id} ya está en la app`,true);
     const toRec=!!pf.forceRec;
     const paso=toRec?0:Math.max(0,ru.indexOf(view));
     const det=($('#f-det')?.value||'').trim();
-    const dueV=$('#f-due').value;
+    const fechaV=$('#f-fecha').value, cod=$('#f-cod').value, rut=$('#f-rut').value.replace(/[^0-9kK]/g,'');
     const o={id,cliente:$('#f-cl').value.trim()||'Sin cliente',tipo,medida:$('#f-med').value.trim()||'—',cant:+$('#f-cant').value||1,prio:$('#f-pri').value,
-      due:dueV?new Date(dueV+'T18:00').getTime():Date.now()+2*day,ruta:ru,paso,estado:'cola',acc:0,t0:null,op:null,checks:{},tiempos:{},motivo:null,
-      photo:toRec||undefined,detalle:det||undefined,fechaOT:fechaISO(pf.fecha)||undefined,manual:true,
-      log:[{t:Date.now(),x:(toRec?`Ingresada desde foto (${S(view).name})`:`Ingresada solo con N° en ${S(view).name}`)+(local.op?.[view]?` · ${local.op[view]}`:'')}]};
+      due:(fechaV?new Date(fechaV+'T18:00').getTime():Date.now())+(tipo==='Afilado'?4:10)*day,codigo:cod,rut:rut||undefined,ruta:ru,paso,estado:'cola',acc:0,t0:null,op:null,checks:{},tiempos:{},motivo:null,
+      photo:toRec||undefined,detalle:det||undefined,fechaOT:fechaV||undefined,manual:true,
+      log:[{t:Date.now(),x:(toRec?`Ingresada desde foto (${S(view).name})`:`Ingresada solo con N° en ${S(view).name}`)+(local.operario?` · ${local.operario}`:'')}]};
     const fi=$('#f-in');
     if(fi&&fi.checked&&ru[paso]===view){orders.set(o.id,o);entrada(o)} else persist(o);
     ui={sel:null,newForm:false,created:id}; render(); toast(`${id} ingresada`);
